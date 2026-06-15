@@ -1,0 +1,23 @@
+{
+  "name": "Beauty Cam",
+  "short_name": "BeautyCam",
+  "description": "Ad-free offline beauty camera",
+  "start_url": "/beauty-cam/",
+  "scope": "/beauty-cam/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#ff6b9d",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
