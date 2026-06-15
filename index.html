@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Beauty Cam">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="manifest" href="manifest.json">
+    <title>Beauty Cam</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif;
+            overflow: hidden;
+            height: 100%;
+            width: 100%;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Camera view */
+        #camera-container {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+        }
+        video { display: none; }
+        #canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Top status */
+        .top-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            padding: env(safe-area-inset-top, 20px) 20px 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .app-title {
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .offline-badge {
+            background: rgba(76, 175, 80, 0.8);
+            color: white;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+        }
+
+        /* Controls panel */
+        .controls {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            padding: 20px 20px calc(env(safe-area-inset-bottom, 20px) + 10px);
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px 24px 0 0;
+            z-index: 10;
+        }
+
+        /* Sliders */
+        .slider-group {
+            margin-bottom: 16px;
+        }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 14px;
+            color: white;
+        }
+        .slider-label {
+            width: 75px;
+            font-size: 13px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .slider-label .emoji {
+            font-size: 16px;
+        }
+        input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 5px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.2);
+            outline: none;
+            margin: 0 12px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ff6b9d;
+            box-shadow: 0 2px 6px rgba(255,107,157,0.4);
+        }
+        .slider-value {
+            width: 35px;
+            text-align: right;
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* Buttons */
+        .button-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding-top: 8px;
+        }
+        .action-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 11px;
+            text-align: center;
+            cursor: pointer;
+            padding: 8px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .action-btn .icon {
+            font-size: 26px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .capture-btn {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            border: 4px solid rgba(255,255,255,0.9);
+            background: transparent;
+            cursor: pointer;
+            position: relative;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .capture-btn::after {
+            content: '';
+            position: absolute;
+            top: 5px; left: 5px; right: 5px; bottom: 5px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.9);
+            transition: transform 0.1s;
+        }
+        .capture-btn:active::after {
+            transform: scale(0.85);
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(30, 30, 30, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Preset buttons */
+        .presets {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+        .preset-btn {
+            background: rgba(255,255,255,0.12);
+            border: 1.5px solid rgba(255,255,255,0.2);
+            color: white;
+            font-size: 12px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            white-space: nowrap;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .preset-btn.active {
+            background: rgba(255,107,157,0.3);
+            border-color: #ff6b9d;
+        }
+    </style>
+</head>
+<body>
+    <div id="camera-container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="top-bar">
+        <span class="app-title">✨ Beauty Cam</span>
+        <span class="offline-badge">● Offline Ready</span>
+    </div>
+
+    <div class="controls">
+        <!-- Presets -->
+        <div class="presets">
+            <button class="preset-btn active" data-preset="natural">🌿 Natural</button>
+            <button class="preset-btn" data-preset="youthful">🌸 Youthful</button>
+            <button class="preset-btn" data-preset="glam">💫 Glam</button>
+            <button class="preset-btn" data-preset="subtle">🤍 Subtle</button>
+        </div>
+
+        <!-- Sliders -->
+        <div class="slider-group">
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">✨</span> Smooth</span>
+                <input type="range" id="smoothing" min="0" max="100" value="50">
+                <span class="slider-value" id="smooth-val">50</span>
+            </div>
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">☀️</span> Glow</span>
+                <input type="range" id="brightness" min="0" max="100" value="20">
+                <span class="slider-value" id="bright-val">20</span>
+            </div>
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌸</span> Soft</span>
+                <input type="range" id="softness" min="0" max="100" value="35">
+                <span class="slider-value" id="soft-val">35</span>
+            </div>
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌡️</span> Warm</span>
+                <input type="range" id="warmth" min="0" max="100" value="15">
+                <span class="slider-value" id="warm-val">15</span>
+            </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="button-row">
+            <button class="action-btn" id="flip-btn">
+                <span class="icon">🔄</span>
+                Flip
+            </button>
+            <button class="action-btn" id="compare-btn">
+                <span class="icon">👁️</span>
+                Compare
+            </button>
+            <button class="capture-btn" id="capture-btn"></button>
+            <button class="action-btn" id="reset-btn">
+                <span class="icon">↺</span>
+                Reset
+            </button>
+            <button class="action-btn" id="preset-cycle">
+                <span class="icon">🎨</span>
+                Next
+            </button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // DOM elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: false });
+
+        const smoothSlider = document.getElementById('smoothing');
+        const brightSlider = document.getElementById('brightness');
+        const softSlider = document.getElementById('softness');
+        const warmSlider = document.getElementById('warmth');
+
+        let currentFacing = 'user';
+        let showOriginal = false;
+        let stream = null;
+        let animationId = null;
+
+        // Presets
+        const presets = {
+            natural: { smooth: 50, bright: 20, soft: 35, warm: 15 },
+            youthful: { smooth: 75, bright: 30, soft: 50, warm: 20 },
+            glam: { smooth: 85, bright: 40, soft: 25, warm: 30 },
+            subtle: { smooth: 30, bright: 10, soft: 20, warm: 10 }
+        };
+
+        // Apply a preset
+        function applyPreset(name) {
+            const p = presets[name];
+            if (!p) return;
+
+            smoothSlider.value = p.smooth;
+            brightSlider.value = p.bright;
+            softSlider.value = p.soft;
+            warmSlider.value = p.warm;
+
+            updateSliderDisplays();
+
+            // Update active button
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.preset === name);
+            });
+        }
+
+        function updateSliderDisplays() {
+            document.getElementById('smooth-val').textContent = smoothSlider.value;
+            document.getElementById('bright-val').textContent = brightSlider.value;
+            document.getElementById('soft-val').textContent = softSlider.value;
+            document.getElementById('warm-val').textContent = warmSlider.value;
+        }
+
+        // Start camera
+        async function startCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: currentFacing,
+                        width: { ideal: 1280 },
+                        height: { ideal: 1920 }
+                    },
+                    audio: false
+                });
+                video.srcObject = stream;
+                await video.play();
+
+                // Match canvas to video dimensions
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // Start render loop
+                if (animationId) cancelAnimationFrame(animationId);
+                renderLoop();
+            } catch (err) {
+                showToast('📷 Please allow camera access');
+            }
+        }
+
+        // Render loop
+        function renderLoop() {
+            if (video.readyState >= video.HAVE_CURRENT_DATA) {
+                // Draw video frame
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Apply beauty filters (unless comparing)
+                if (!showOriginal) {
+                    applyBeautyFilters();
+                }
+            }
+            animationId = requestAnimationFrame(renderLoop);
+        }
+
+        // Main beauty filter pipeline
+        function applyBeautyFilters() {
+            const smooth = smoothSlider.value / 100;
+            const bright = brightSlider.value / 100;
+            const soft = softSlider.value / 100;
+            const warm = warmSlider.value / 100;
+
+            // Build CSS filter string (GPU-accelerated on iOS)
+            let filters = [];
+
+            // Smoothing: subtle blur removes fine lines/wrinkles
+            if (smooth > 0) {
+                filters.push('blur(' + (smooth * 1.0) + 'px)');
+            }
+
+            // Brightness: adds a youthful glow
+            if (bright > 0) {
+                filters.push('brightness(' + (1 + bright * 0.45) + ')');
+            }
+
+            // Softness: reduce contrast to soften harsh shadows/wrinkles
+            if (soft > 0) {
+                filters.push('contrast(' + (1 - soft * 0.15) + ')');
+            }
+
+            // Saturation: healthy-looking skin
+            filters.push('saturate(' + (1 + bright * 0.15 + warm * 0.1) + ')');
+
+            // Apply all filters at once (single GPU pass)
+            if (filters.length > 0) {
+                ctx.filter = filters.join(' ');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.filter = 'none';
+            }
+
+            // Warm overlay: adds golden/rosy tone for healthy skin
+            if (warm > 0.05) {
+                ctx.globalAlpha = warm * 0.07;
+                ctx.fillStyle = '#ffd4b8';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Soft light overlay: mimics studio lighting
+            if (soft > 0.3) {
+                ctx.globalAlpha = (soft - 0.3) * 0.06;
+                ctx.fillStyle = '#ffffff';
+                // Radial-ish center glow (approximation)
+                const cx = canvas.width / 2;
+                const cy = canvas.height / 3;
+                const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, canvas.height * 0.7);
+                gradient.addColorStop(0, 'rgba(255,255,255,0.3)');
+                gradient.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // Capture photo
+        function capturePhoto() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(canvas, 0, 0);
+
+            tempCanvas.toBlob(function(blob) {
+                // Method 1: Try share API (iOS "Save Image" option)
+                if (navigator.share && navigator.canShare) {
+                    const file = new File([blob], 'beauty-photo.jpg', { type: 'image/jpeg' });
+                    if (navigator.canShare({ files: [file] })) {
+                        navigator.share({
+                            files: [file],
+                            title: 'Beauty Cam Photo'
+                        }).then(() => {
+                            showToast('📸 Photo shared!');
+                        }).catch(() => {
+                            // User cancelled share - fall back to download
+                            downloadBlob(blob);
+                        });
+                        return;
+                    }
+                }
+                // Method 2: Download fallback
+                downloadBlob(blob);
+            }, 'image/jpeg', 0.92);
+        }
+
+        function downloadBlob(blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'beauty-' + Date.now() + '.jpg';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('📸 Photo saved!');
+        }
+
+        // Toast
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // Event listeners
+        document.getElementById('capture-btn').addEventListener('click', capturePhoto);
+
+        document.getElementById('flip-btn').addEventListener('click', function() {
+            currentFacing = currentFacing === 'user' ? 'environment' : 'user';
+            startCamera();
+        });
+
+        // Compare: hold to see original
+        const compareBtn = document.getElementById('compare-btn');
+        compareBtn.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            showOriginal = true;
+        });
+        compareBtn.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            showOriginal = false;
+        });
+        compareBtn.addEventListener('mousedown', function() { showOriginal = true; });
+        compareBtn.addEventListener('mouseup', function() { showOriginal = false; });
+        compareBtn.addEventListener('mouseleave', function() { showOriginal = false; });
+
+        // Reset
+        document.getElementById('reset-btn').addEventListener('click', function() {
+            applyPreset('natural');
+            showToast('↺ Reset to Natural');
+        });
+
+        // Preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                applyPreset(this.dataset.preset);
+            });
+        });
+
+        // Cycle presets
+        let presetIndex = 0;
+        const presetNames = Object.keys(presets);
+        document.getElementById('preset-cycle').addEventListener('click', function() {
+            presetIndex = (presetIndex + 1) % presetNames.length;
+            applyPreset(presetNames[presetIndex]);
+            showToast('🎨 ' + presetNames[presetIndex].charAt(0).toUpperCase() + presetNames[presetIndex].slice(1));
+        });
+
+        // Slider displays
+        [smoothSlider, brightSlider, softSlider, warmSlider].forEach(slider => {
+            slider.addEventListener('input', updateSliderDisplays);
+        });
+
+        // Initialize
+        startCamera();
+
+    })();
+    </script>
+
+    <!-- Register service worker for offline support -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+            .then(function() { console.log('SW registered - app works offline!'); })
+            .catch(function(err) { console.log('SW registration failed:', err); });
+    }
+    </script>
+</body>
+</html>
