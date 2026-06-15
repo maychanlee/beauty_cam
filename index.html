@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- iOS PWA meta tags - makes it behave like a native app -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Beauty Cam">
@@ -10,6 +11,7 @@
     <link rel="manifest" href="manifest.json">
     <title>Beauty Cam</title>
     <style>
+        /* ===== RESET & BASE ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
             background: #000;
@@ -22,19 +24,19 @@
             user-select: none;
         }
 
-        /* Camera view */
+        /* ===== CAMERA VIEW ===== */
         #camera-container {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
         }
-        video { display: none; }
+        video { display: none; } /* Hidden - we render to canvas instead */
         #canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        /* Top status */
+        /* ===== TOP BAR ===== */
         .top-bar {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -59,90 +61,144 @@
             margin-left: 8px;
         }
 
-        /* Controls panel */
+        /* ===== CONTROLS PANEL ===== */
         .controls {
             position: fixed;
             bottom: 0; left: 0; right: 0;
-            padding: 20px 20px calc(env(safe-area-inset-bottom, 20px) + 10px);
-            background: rgba(0, 0, 0, 0.65);
+            max-height: 70vh;
+            overflow-y: auto;
+            padding: 16px 16px calc(env(safe-area-inset-bottom, 20px) + 10px);
+            background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-radius: 24px 24px 0 0;
             z-index: 10;
         }
 
-        /* Sliders */
-        .slider-group {
-            margin-bottom: 16px;
+        /* ===== TABS ===== */
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 14px;
+            overflow-x: auto;
+            padding-bottom: 4px;
         }
+        .tab-btn {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.6);
+            font-size: 11px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            white-space: nowrap;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: rgba(255,107,157,0.25);
+            border-color: #ff6b9d;
+            color: white;
+        }
+
+        /* Tab content visibility */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ===== PRESETS ===== */
+        .presets {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+        .preset-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1.5px solid rgba(255,255,255,0.2);
+            color: white;
+            font-size: 11px;
+            padding: 5px 12px;
+            border-radius: 18px;
+            white-space: nowrap;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .preset-btn.active {
+            background: rgba(255,107,157,0.3);
+            border-color: #ff6b9d;
+        }
+
+        /* ===== SLIDERS ===== */
         .slider-row {
             display: flex;
             align-items: center;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
             color: white;
         }
         .slider-label {
-            width: 75px;
-            font-size: 13px;
+            width: 85px;
+            font-size: 12px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
         }
-        .slider-label .emoji {
-            font-size: 16px;
-        }
+        .slider-label .emoji { font-size: 14px; }
         input[type="range"] {
             flex: 1;
             -webkit-appearance: none;
             appearance: none;
-            height: 5px;
-            border-radius: 3px;
+            height: 4px;
+            border-radius: 2px;
             background: rgba(255,255,255,0.2);
             outline: none;
-            margin: 0 12px;
+            margin: 0 10px;
         }
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             border-radius: 50%;
             background: #ff6b9d;
             box-shadow: 0 2px 6px rgba(255,107,157,0.4);
         }
         .slider-value {
-            width: 35px;
+            width: 30px;
             text-align: right;
-            font-size: 12px;
-            color: rgba(255,255,255,0.7);
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
         }
 
-        /* Buttons */
+        /* ===== ACTION BUTTONS ===== */
         .button-row {
             display: flex;
             justify-content: space-around;
             align-items: center;
-            padding-top: 8px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 10px;
         }
         .action-btn {
             background: none;
             border: none;
             color: white;
-            font-size: 11px;
+            font-size: 10px;
             text-align: center;
             cursor: pointer;
-            padding: 8px;
+            padding: 6px;
             -webkit-tap-highlight-color: transparent;
         }
         .action-btn .icon {
-            font-size: 26px;
+            font-size: 24px;
             display: block;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
         .capture-btn {
-            width: 68px;
-            height: 68px;
+            width: 62px;
+            height: 62px;
             border-radius: 50%;
             border: 4px solid rgba(255,255,255,0.9);
             background: transparent;
@@ -158,11 +214,9 @@
             background: rgba(255,255,255,0.9);
             transition: transform 0.1s;
         }
-        .capture-btn:active::after {
-            transform: scale(0.85);
-        }
+        .capture-btn:active::after { transform: scale(0.85); }
 
-        /* Toast notification */
+        /* ===== TOAST NOTIFICATION ===== */
         .toast {
             position: fixed;
             top: 80px;
@@ -184,160 +238,376 @@
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
-
-        /* Preset buttons */
-        .presets {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-            overflow-x: auto;
-            padding-bottom: 4px;
-        }
-        .preset-btn {
-            background: rgba(255,255,255,0.12);
-            border: 1.5px solid rgba(255,255,255,0.2);
-            color: white;
-            font-size: 12px;
-            padding: 6px 14px;
-            border-radius: 20px;
-            white-space: nowrap;
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-            transition: background 0.2s, border-color 0.2s;
-        }
-        .preset-btn.active {
-            background: rgba(255,107,157,0.3);
-            border-color: #ff6b9d;
-        }
     </style>
 </head>
 <body>
+    <!-- ===== CAMERA VIEW ===== -->
     <div id="camera-container">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
     </div>
 
+    <!-- ===== TOP BAR ===== -->
     <div class="top-bar">
         <span class="app-title">✨ Beauty Cam</span>
-        <span class="offline-badge">● Offline Ready</span>
+        <span class="offline-badge">● Offline</span>
     </div>
 
+    <!-- ===== CONTROLS ===== -->
     <div class="controls">
-        <!-- Presets -->
+
+        <!-- Preset buttons -->
         <div class="presets">
             <button class="preset-btn active" data-preset="natural">🌿 Natural</button>
             <button class="preset-btn" data-preset="youthful">🌸 Youthful</button>
             <button class="preset-btn" data-preset="glam">💫 Glam</button>
             <button class="preset-btn" data-preset="subtle">🤍 Subtle</button>
+            <button class="preset-btn" data-preset="porcelain">🪷 Porcelain</button>
+            <button class="preset-btn" data-preset="golden">🌅 Golden</button>
         </div>
 
-        <!-- Sliders -->
-        <div class="slider-group">
+        <!-- Tab navigation -->
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="skin">Skin</button>
+            <button class="tab-btn" data-tab="light">Light</button>
+            <button class="tab-btn" data-tab="color">Color</button>
+            <button class="tab-btn" data-tab="face">Face</button>
+            <button class="tab-btn" data-tab="effects">Effects</button>
+        </div>
+
+        <!-- ===== SKIN TAB ===== -->
+        <div class="tab-content active" id="tab-skin">
+            <!-- Smooth: overall wrinkle and texture reduction -->
             <div class="slider-row">
                 <span class="slider-label"><span class="emoji">✨</span> Smooth</span>
                 <input type="range" id="smoothing" min="0" max="100" value="50">
-                <span class="slider-value" id="smooth-val">50</span>
+                <span class="slider-value" id="val-smoothing">50</span>
             </div>
+            <!-- Pores: fine-grain pore minimizing -->
             <div class="slider-row">
-                <span class="slider-label"><span class="emoji">☀️</span> Glow</span>
-                <input type="range" id="brightness" min="0" max="100" value="20">
-                <span class="slider-value" id="bright-val">20</span>
+                <span class="slider-label"><span class="emoji">🫧</span> Pores</span>
+                <input type="range" id="pores" min="0" max="100" value="30">
+                <span class="slider-value" id="val-pores">30</span>
             </div>
+            <!-- Blemish: spot and mark fading -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🩹</span> Blemish</span>
+                <input type="range" id="blemish" min="0" max="100" value="20">
+                <span class="slider-value" id="val-blemish">20</span>
+            </div>
+            <!-- Tone Even: reduces redness and blotchiness -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🎨</span> Tone Even</span>
+                <input type="range" id="toneEven" min="0" max="100" value="25">
+                <span class="slider-value" id="val-toneEven">25</span>
+            </div>
+            <!-- Undereye: brightens dark circles under eyes -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">👁️</span> Undereye</span>
+                <input type="range" id="undereye" min="0" max="100" value="20">
+                <span class="slider-value" id="val-undereye">20</span>
+            </div>
+            <!-- Soft: dreamy softness, reduces harsh details -->
             <div class="slider-row">
                 <span class="slider-label"><span class="emoji">🌸</span> Soft</span>
                 <input type="range" id="softness" min="0" max="100" value="35">
-                <span class="slider-value" id="soft-val">35</span>
-            </div>
-            <div class="slider-row">
-                <span class="slider-label"><span class="emoji">🌡️</span> Warm</span>
-                <input type="range" id="warmth" min="0" max="100" value="15">
-                <span class="slider-value" id="warm-val">15</span>
+                <span class="slider-value" id="val-softness">35</span>
             </div>
         </div>
 
-        <!-- Action buttons -->
+        <!-- ===== LIGHT TAB ===== -->
+        <div class="tab-content" id="tab-light">
+            <!-- Exposure: overall light level adjustment -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">☀️</span> Exposure</span>
+                <input type="range" id="exposure" min="-50" max="50" value="10">
+                <span class="slider-value" id="val-exposure">10</span>
+            </div>
+            <!-- Brightness: face glow boost -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">💡</span> Brightness</span>
+                <input type="range" id="brightness" min="0" max="100" value="20">
+                <span class="slider-value" id="val-brightness">20</span>
+            </div>
+            <!-- Highlights: brighten already-light areas -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🔆</span> Highlights</span>
+                <input type="range" id="highlights" min="-50" max="50" value="10">
+                <span class="slider-value" id="val-highlights">10</span>
+            </div>
+            <!-- Shadows: lift dark areas to reduce harsh shadows -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌑</span> Shadows</span>
+                <input type="range" id="shadows" min="-50" max="50" value="15">
+                <span class="slider-value" id="val-shadows">15</span>
+            </div>
+            <!-- Contrast: adjust overall contrast -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🎚️</span> Contrast</span>
+                <input type="range" id="contrast" min="-50" max="50" value="-10">
+                <span class="slider-value" id="val-contrast">-10</span>
+            </div>
+        </div>
+
+        <!-- ===== COLOR TAB ===== -->
+        <div class="tab-content" id="tab-color">
+            <!-- Warmth: golden/cool skin tone -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌡️</span> Warmth</span>
+                <input type="range" id="warmth" min="0" max="100" value="15">
+                <span class="slider-value" id="val-warmth">15</span>
+            </div>
+            <!-- Saturation: color intensity -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🎨</span> Saturation</span>
+                <input type="range" id="saturation" min="-50" max="50" value="5">
+                <span class="slider-value" id="val-saturation">5</span>
+            </div>
+            <!-- Hue Shift: rotate overall color -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌈</span> Hue Shift</span>
+                <input type="range" id="hueShift" min="-30" max="30" value="0">
+                <span class="slider-value" id="val-hueShift">0</span>
+            </div>
+            <!-- Lip Tint: adds natural rosy lip color -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🩷</span> Lip Tint</span>
+                <input type="range" id="lipTint" min="0" max="100" value="0">
+                <span class="slider-value" id="val-lipTint">0</span>
+            </div>
+            <!-- Blush: pink flush on cheeks -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌺</span> Blush</span>
+                <input type="range" id="blush" min="0" max="100" value="0">
+                <span class="slider-value" id="val-blush">0</span>
+            </div>
+        </div>
+
+        <!-- ===== FACE TAB ===== -->
+        <div class="tab-content" id="tab-face">
+            <!-- Face Slim: subtle horizontal squeeze for slimming -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">📐</span> Face Slim</span>
+                <input type="range" id="faceSlim" min="0" max="100" value="0">
+                <span class="slider-value" id="val-faceSlim">0</span>
+            </div>
+            <!-- Eye Size: slight eye enlargement -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">👀</span> Eye Size</span>
+                <input type="range" id="eyeSize" min="0" max="100" value="0">
+                <span class="slider-value" id="val-eyeSize">0</span>
+            </div>
+            <!-- Eye Bright: whiten and brighten eye area -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">✨</span> Eye Bright</span>
+                <input type="range" id="eyeBright" min="0" max="100" value="15">
+                <span class="slider-value" id="val-eyeBright">15</span>
+            </div>
+            <!-- Sharpen: crisp detail on eyes, lips, hair -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🔍</span> Sharpen</span>
+                <input type="range" id="sharpen" min="0" max="100" value="20">
+                <span class="slider-value" id="val-sharpen">20</span>
+            </div>
+        </div>
+
+        <!-- ===== EFFECTS TAB ===== -->
+        <div class="tab-content" id="tab-effects">
+            <!-- Bloom: soft glow bleeding from highlights -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌟</span> Bloom</span>
+                <input type="range" id="bloom" min="0" max="100" value="15">
+                <span class="slider-value" id="val-bloom">15</span>
+            </div>
+            <!-- Vignette: darkened edges to focus on face -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🖼️</span> Vignette</span>
+                <input type="range" id="vignette" min="0" max="100" value="10">
+                <span class="slider-value" id="val-vignette">10</span>
+            </div>
+            <!-- Grain: film-like texture overlay -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🎞️</span> Grain</span>
+                <input type="range" id="grain" min="0" max="100" value="0">
+                <span class="slider-value" id="val-grain">0</span>
+            </div>
+            <!-- Fade: lifts blacks for a dreamy, vintage look -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">🌫️</span> Fade</span>
+                <input type="range" id="fade" min="0" max="100" value="0">
+                <span class="slider-value" id="val-fade">0</span>
+            </div>
+            <!-- Color Filter: tinted overlays (rose, lavender, blue, peach, mint) -->
+            <div class="slider-row">
+                <span class="slider-label"><span class="emoji">💜</span> Color Filter</span>
+                <input type="range" id="colorFilter" min="0" max="100" value="0">
+                <span class="slider-value" id="val-colorFilter">0</span>
+            </div>
+        </div>
+
+        <!-- ===== ACTION BUTTONS ===== -->
         <div class="button-row">
             <button class="action-btn" id="flip-btn">
-                <span class="icon">🔄</span>
-                Flip
+                <span class="icon">🔄</span>Flip
             </button>
             <button class="action-btn" id="compare-btn">
-                <span class="icon">👁️</span>
-                Compare
+                <span class="icon">👁️</span>Hold
             </button>
             <button class="capture-btn" id="capture-btn"></button>
             <button class="action-btn" id="reset-btn">
-                <span class="icon">↺</span>
-                Reset
+                <span class="icon">↺</span>Reset
             </button>
-            <button class="action-btn" id="preset-cycle">
-                <span class="icon">🎨</span>
-                Next
+            <button class="action-btn" id="timer-btn">
+                <span class="icon">⏱️</span>Timer
             </button>
         </div>
     </div>
 
+    <!-- Toast notification popup -->
     <div class="toast" id="toast"></div>
 
+    <!-- ===== MAIN APPLICATION JAVASCRIPT ===== -->
     <script>
     (function() {
         'use strict';
 
-        // DOM elements
+        // ============================================
+        // DOM ELEMENTS
+        // ============================================
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: false });
+        // willReadFrequently: true because we use getImageData for grain & face slim
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-        const smoothSlider = document.getElementById('smoothing');
-        const brightSlider = document.getElementById('brightness');
-        const softSlider = document.getElementById('softness');
-        const warmSlider = document.getElementById('warmth');
+        // ============================================
+        // STATE VARIABLES
+        // ============================================
+        let currentFacing = 'user';   // 'user' = front camera, 'environment' = back
+        let showOriginal = false;      // When true, shows unfiltered video
+        let stream = null;             // MediaStream reference
+        let animationId = null;        // requestAnimationFrame ID
+        let timerSeconds = 0;          // Photo timer (0 = off, 3, 5, or 10)
 
-        let currentFacing = 'user';
-        let showOriginal = false;
-        let stream = null;
-        let animationId = null;
+        // ============================================
+        // ALL SLIDER IDS
+        // These correspond to the input elements in the HTML
+        // ============================================
+        const sliderIds = [
+            // Skin tab
+            'smoothing', 'pores', 'blemish', 'toneEven', 'undereye', 'softness',
+            // Light tab
+            'exposure', 'brightness', 'highlights', 'shadows', 'contrast',
+            // Color tab
+            'warmth', 'saturation', 'hueShift', 'lipTint', 'blush',
+            // Face tab
+            'faceSlim', 'eyeSize', 'eyeBright', 'sharpen',
+            // Effects tab
+            'bloom', 'vignette', 'grain', 'fade', 'colorFilter'
+        ];
 
-        // Presets
+        // ============================================
+        // HELPER: Get slider value as a number
+        // ============================================
+        function sv(id) {
+            return parseFloat(document.getElementById(id).value);
+        }
+
+        // ============================================
+        // PRESETS
+        // Each preset defines values for all 25 sliders
+        // ============================================
         const presets = {
-            natural: { smooth: 50, bright: 20, soft: 35, warm: 15 },
-            youthful: { smooth: 75, bright: 30, soft: 50, warm: 20 },
-            glam: { smooth: 85, bright: 40, soft: 25, warm: 30 },
-            subtle: { smooth: 30, bright: 10, soft: 20, warm: 10 }
+            natural: {
+                smoothing: 50, pores: 30, blemish: 20, toneEven: 25, undereye: 20, softness: 35,
+                exposure: 10, brightness: 20, highlights: 10, shadows: 15, contrast: -10,
+                warmth: 15, saturation: 5, hueShift: 0, lipTint: 0, blush: 0,
+                faceSlim: 0, eyeSize: 0, eyeBright: 15, sharpen: 20,
+                bloom: 15, vignette: 10, grain: 0, fade: 0, colorFilter: 0
+            },
+            youthful: {
+                smoothing: 75, pores: 50, blemish: 40, toneEven: 40, undereye: 45, softness: 50,
+                exposure: 15, brightness: 30, highlights: 15, shadows: 20, contrast: -15,
+                warmth: 20, saturation: 8, hueShift: 0, lipTint: 15, blush: 15,
+                faceSlim: 10, eyeSize: 10, eyeBright: 30, sharpen: 15,
+                bloom: 30, vignette: 15, grain: 0, fade: 5, colorFilter: 10
+            },
+            glam: {
+                smoothing: 85, pores: 60, blemish: 50, toneEven: 50, undereye: 50, softness: 25,
+                exposure: 10, brightness: 40, highlights: 20, shadows: 10, contrast: 5,
+                warmth: 30, saturation: 15, hueShift: 0, lipTint: 40, blush: 30,
+                faceSlim: 15, eyeSize: 15, eyeBright: 40, sharpen: 35,
+                bloom: 20, vignette: 25, grain: 0, fade: 0, colorFilter: 20
+            },
+            subtle: {
+                smoothing: 30, pores: 15, blemish: 10, toneEven: 15, undereye: 10, softness: 20,
+                exposure: 5, brightness: 10, highlights: 5, shadows: 10, contrast: -5,
+                warmth: 10, saturation: 3, hueShift: 0, lipTint: 0, blush: 0,
+                faceSlim: 0, eyeSize: 0, eyeBright: 10, sharpen: 10,
+                bloom: 10, vignette: 5, grain: 0, fade: 0, colorFilter: 0
+            },
+            porcelain: {
+                smoothing: 90, pores: 70, blemish: 60, toneEven: 60, undereye: 55, softness: 55,
+                exposure: 15, brightness: 35, highlights: 20, shadows: 25, contrast: -20,
+                warmth: 5, saturation: -5, hueShift: 0, lipTint: 10, blush: 10,
+                faceSlim: 5, eyeSize: 5, eyeBright: 25, sharpen: 10,
+                bloom: 35, vignette: 10, grain: 0, fade: 10, colorFilter: 5
+            },
+            golden: {
+                smoothing: 55, pores: 35, blemish: 25, toneEven: 30, undereye: 25, softness: 30,
+                exposure: 12, brightness: 25, highlights: 15, shadows: 15, contrast: -5,
+                warmth: 45, saturation: 12, hueShift: 5, lipTint: 10, blush: 20,
+                faceSlim: 5, eyeSize: 0, eyeBright: 20, sharpen: 25,
+                bloom: 25, vignette: 20, grain: 5, fade: 0, colorFilter: 15
+            }
         };
 
-        // Apply a preset
+        // ============================================
+        // APPLY PRESET
+        // Sets all slider values and updates UI
+        // ============================================
         function applyPreset(name) {
             const p = presets[name];
             if (!p) return;
 
-            smoothSlider.value = p.smooth;
-            brightSlider.value = p.bright;
-            softSlider.value = p.soft;
-            warmSlider.value = p.warm;
+            // Set each slider to the preset value
+            sliderIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && p[id] !== undefined) {
+                    el.value = p[id];
+                }
+            });
 
-            updateSliderDisplays();
+            // Update the displayed values
+            updateAllDisplays();
 
-            // Update active button
+            // Highlight the active preset button
             document.querySelectorAll('.preset-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.preset === name);
             });
         }
 
-        function updateSliderDisplays() {
-            document.getElementById('smooth-val').textContent = smoothSlider.value;
-            document.getElementById('bright-val').textContent = brightSlider.value;
-            document.getElementById('soft-val').textContent = softSlider.value;
-            document.getElementById('warm-val').textContent = warmSlider.value;
+        // ============================================
+        // UPDATE SLIDER DISPLAY VALUES
+        // Syncs the number shown next to each slider
+        // ============================================
+        function updateAllDisplays() {
+            sliderIds.forEach(id => {
+                const valEl = document.getElementById('val-' + id);
+                const slider = document.getElementById(id);
+                if (valEl && slider) valEl.textContent = slider.value;
+            });
         }
 
-        // Start camera
+        // ============================================
+        // CAMERA SETUP
+        // Requests camera access and starts video stream
+        // ============================================
         async function startCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+            // Stop any existing stream
+            if (stream) stream.getTracks().forEach(t => t.stop());
 
             try {
+                // Request camera with preferred settings
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: currentFacing,
@@ -346,14 +616,16 @@
                     },
                     audio: false
                 });
+
+                // Attach stream to video element
                 video.srcObject = stream;
                 await video.play();
 
-                // Match canvas to video dimensions
+                // Match canvas dimensions to video
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
 
-                // Start render loop
+                // Start the render loop
                 if (animationId) cancelAnimationFrame(animationId);
                 renderLoop();
             } catch (err) {
@@ -361,109 +633,371 @@
             }
         }
 
-        // Render loop
+        // ============================================
+        // RENDER LOOP
+        // Runs every frame (~30-60fps) to draw filtered video
+        // ============================================
         function renderLoop() {
             if (video.readyState >= video.HAVE_CURRENT_DATA) {
-                // Draw video frame
+                // Draw the raw video frame to canvas
+                ctx.filter = 'none';
+                ctx.globalAlpha = 1.0;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Apply beauty filters (unless comparing)
+                // Apply beauty filters (unless user is holding Compare button)
                 if (!showOriginal) {
-                    applyBeautyFilters();
+                    applyAllFilters();
                 }
             }
+            // Schedule next frame
             animationId = requestAnimationFrame(renderLoop);
         }
 
-        // Main beauty filter pipeline
-        function applyBeautyFilters() {
-            const smooth = smoothSlider.value / 100;
-            const bright = brightSlider.value / 100;
-            const soft = softSlider.value / 100;
-            const warm = warmSlider.value / 100;
+        // ============================================
+        // MAIN FILTER PIPELINE
+        // Applies all beauty effects in order
+        // ============================================
+        function applyAllFilters() {
+            const w = canvas.width;
+            const h = canvas.height;
 
-            // Build CSS filter string (GPU-accelerated on iOS)
+            // ------------------------------------------
+            // PHASE 1: CSS FILTER PASS (GPU-accelerated)
+            // These are fast because the browser composites them on the GPU
+            // ------------------------------------------
+
+            // Read current slider values
+            const smooth = sv('smoothing') / 100;
+            const pores = sv('pores') / 100;
+            const blemish = sv('blemish') / 100;
+            const soft = sv('softness') / 100;
+            const exposure = sv('exposure') / 50;      // Range: -1 to 1
+            const bright = sv('brightness') / 100;
+            const highlights = sv('highlights') / 50;  // Range: -1 to 1
+            const shadows = sv('shadows') / 50;        // Range: -1 to 1
+            const contrast = sv('contrast') / 50;      // Range: -1 to 1
+            const warmth = sv('warmth') / 100;
+            const sat = sv('saturation') / 50;         // Range: -1 to 1
+            const hue = sv('hueShift');                 // Range: -30 to 30
+            const sharpen = sv('sharpen') / 100;
+            const faceSlim = sv('faceSlim') / 100;
+
+            // Build the CSS filter string
             let filters = [];
 
-            // Smoothing: subtle blur removes fine lines/wrinkles
-            if (smooth > 0) {
-                filters.push('blur(' + (smooth * 1.0) + 'px)');
+            // Smoothing: combines smooth + pores + blemish into total blur amount
+            // Higher values = more wrinkle/texture reduction
+            const totalSmooth = (smooth * 0.5 + pores * 0.3 + blemish * 0.2);
+            if (totalSmooth > 0) {
+                filters.push('blur(' + (totalSmooth * 1.2) + 'px)');
             }
 
-            // Brightness: adds a youthful glow
-            if (bright > 0) {
-                filters.push('brightness(' + (1 + bright * 0.45) + ')');
+            // Brightness: combines exposure + brightness sliders
+            const totalBright = 1 + (exposure * 0.3) + (bright * 0.4);
+            if (totalBright !== 1) {
+                filters.push('brightness(' + totalBright + ')');
             }
 
-            // Softness: reduce contrast to soften harsh shadows/wrinkles
-            if (soft > 0) {
-                filters.push('contrast(' + (1 - soft * 0.15) + ')');
+            // Contrast: softness reduces contrast, contrast slider adjusts directly
+            // Lower contrast = softer, more youthful appearance
+            const totalContrast = 1 + (contrast * 0.3) - (soft * 0.15);
+            if (totalContrast !== 1) {
+                filters.push('contrast(' + totalContrast + ')');
             }
 
-            // Saturation: healthy-looking skin
-            filters.push('saturate(' + (1 + bright * 0.15 + warm * 0.1) + ')');
+            // Saturation: combines saturation slider + warmth influence
+            const totalSat = 1 + (sat * 0.4) + (warmth * 0.08);
+            if (totalSat !== 1) {
+                filters.push('saturate(' + totalSat + ')');
+            }
 
-            // Apply all filters at once (single GPU pass)
+            // Hue rotation: shifts all colors by specified degrees
+            if (hue !== 0) {
+                filters.push('hue-rotate(' + hue + 'deg)');
+            }
+
+            // Apply all CSS filters in a single GPU pass
             if (filters.length > 0) {
                 ctx.filter = filters.join(' ');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, w, h);
                 ctx.filter = 'none';
             }
 
-            // Warm overlay: adds golden/rosy tone for healthy skin
-            if (warm > 0.05) {
-                ctx.globalAlpha = warm * 0.07;
+            // ------------------------------------------
+            // PHASE 2: CANVAS OVERLAY EFFECTS
+            // These use globalAlpha and composite operations
+            // ------------------------------------------
+
+            // Warmth: adds a golden/peach overlay for healthy skin tone
+            if (warmth > 0.05) {
+                ctx.globalAlpha = warmth * 0.08;
                 ctx.fillStyle = '#ffd4b8';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillRect(0, 0, w, h);
                 ctx.globalAlpha = 1.0;
             }
 
-            // Soft light overlay: mimics studio lighting
-            if (soft > 0.3) {
-                ctx.globalAlpha = (soft - 0.3) * 0.06;
+            // Shadows: lifts dark areas using screen blend mode
+            // Makes under-chin, side-of-nose shadows less harsh
+            if (shadows > 0) {
+                ctx.globalAlpha = shadows * 0.06;
+                ctx.fillStyle = '#333355';
+                ctx.globalCompositeOperation = 'screen';
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Highlights: boosts bright areas using overlay blend
+            // Adds dimension and makes skin look dewy
+            if (highlights > 0) {
+                ctx.globalAlpha = highlights * 0.04;
                 ctx.fillStyle = '#ffffff';
-                // Radial-ish center glow (approximation)
-                const cx = canvas.width / 2;
-                const cy = canvas.height / 3;
-                const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, canvas.height * 0.7);
-                gradient.addColorStop(0, 'rgba(255,255,255,0.3)');
-                gradient.addColorStop(1, 'rgba(255,255,255,0)');
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.globalCompositeOperation = 'overlay';
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Skin tone evening: green-tinted overlay neutralizes redness
+            // Counteracts rosacea, acne redness, blotchiness
+            const toneEven = sv('toneEven') / 100;
+            if (toneEven > 0.1) {
+                ctx.globalAlpha = toneEven * 0.04;
+                ctx.fillStyle = '#ccddcc';
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Under-eye brightening: radial gradients at eye positions
+            // Reduces appearance of dark circles
+            const undereye = sv('undereye') / 100;
+            if (undereye > 0.1) {
+                ctx.globalAlpha = undereye * 0.06;
+                // Left under-eye area
+                const eyeGrad = ctx.createRadialGradient(w * 0.35, h * 0.35, 0, w * 0.35, h * 0.35, w * 0.12);
+                eyeGrad.addColorStop(0, 'rgba(255,240,230,0.5)');
+                eyeGrad.addColorStop(1, 'rgba(255,240,230,0)');
+                ctx.fillStyle = eyeGrad;
+                ctx.fillRect(0, 0, w, h);
+                // Right under-eye area
+                const eyeGrad2 = ctx.createRadialGradient(w * 0.65, h * 0.35, 0, w * 0.65, h * 0.35, w * 0.12);
+                eyeGrad2.addColorStop(0, 'rgba(255,240,230,0.5)');
+                eyeGrad2.addColorStop(1, 'rgba(255,240,230,0)');
+                ctx.fillStyle = eyeGrad2;
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Eye brightening: screen blend on eye areas
+            // Makes eyes look more awake and youthful
+            const eyeBright = sv('eyeBright') / 100;
+            if (eyeBright > 0.1) {
+                ctx.globalAlpha = eyeBright * 0.08;
+                ctx.globalCompositeOperation = 'screen';
+                // Left eye glow
+                const eb1 = ctx.createRadialGradient(w * 0.38, h * 0.33, 0, w * 0.38, h * 0.33, w * 0.06);
+                eb1.addColorStop(0, 'rgba(255,255,255,0.6)');
+                eb1.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = eb1;
+                ctx.fillRect(0, 0, w, h);
+                // Right eye glow
+                const eb2 = ctx.createRadialGradient(w * 0.62, h * 0.33, 0, w * 0.62, h * 0.33, w * 0.06);
+                eb2.addColorStop(0, 'rgba(255,255,255,0.6)');
+                eb2.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = eb2;
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Lip tint: multiply blend with pink/red at lip position
+            // Adds natural-looking lip color
+            const lipTint = sv('lipTint') / 100;
+            if (lipTint > 0.05) {
+                ctx.globalAlpha = lipTint * 0.12;
+                ctx.globalCompositeOperation = 'multiply';
+                const lipGrad = ctx.createRadialGradient(w * 0.5, h * 0.48, 0, w * 0.5, h * 0.48, w * 0.08);
+                lipGrad.addColorStop(0, '#cc4466');
+                lipGrad.addColorStop(1, 'rgba(204,68,102,0)');
+                ctx.fillStyle = lipGrad;
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Blush: multiply blend with pink at cheek positions
+            // Adds healthy, youthful flush to cheeks
+            const blush = sv('blush') / 100;
+            if (blush > 0.05) {
+                ctx.globalAlpha = blush * 0.1;
+                ctx.globalCompositeOperation = 'multiply';
+                // Left cheek
+                const bl = ctx.createRadialGradient(w * 0.3, h * 0.42, 0, w * 0.3, h * 0.42, w * 0.1);
+                bl.addColorStop(0, '#ee8899');
+                bl.addColorStop(1, 'rgba(238,136,153,0)');
+                ctx.fillStyle = bl;
+                ctx.fillRect(0, 0, w, h);
+                // Right cheek
+                const br = ctx.createRadialGradient(w * 0.7, h * 0.42, 0, w * 0.7, h * 0.42, w * 0.1);
+                br.addColorStop(0, '#ee8899');
+                br.addColorStop(1, 'rgba(238,136,153,0)');
+                ctx.fillStyle = br;
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Face slim: horizontally squeezes the frame toward center
+            // Creates a subtle slimming effect
+            if (faceSlim > 0.05) {
+                const slimAmount = faceSlim * 0.06;
+                const tempData = ctx.getImageData(0, 0, w, h);
+                ctx.putImageData(tempData, 0, 0);
+                ctx.save();
+                ctx.clearRect(0, 0, w, h);
+                // Scale horizontally while keeping vertical the same
+                ctx.translate(w * slimAmount * 0.5, 0);
+                ctx.scale(1 - slimAmount, 1);
+                ctx.drawImage(canvas, 0, 0, w, h);
+                ctx.restore();
+            }
+
+            // Eye enlarge: scales the eye region slightly larger
+            // Subtle effect that makes eyes appear bigger/more youthful
+            const eyeSize = sv('eyeSize') / 100;
+            if (eyeSize > 0.1) {
+                ctx.globalAlpha = eyeSize * 0.3;
+                const eyeRegion = ctx.getImageData(
+                    Math.floor(w * 0.25),
+                    Math.floor(h * 0.25),
+                    Math.floor(w * 0.5),
+                    Math.floor(h * 0.2)
+                );
+                ctx.putImageData(
+                    eyeRegion,
+                    Math.floor(w * 0.25 - (eyeSize * 2)),
+                    Math.floor(h * 0.25 - (eyeSize * 1))
+                );
+                ctx.globalAlpha = 1.0;
+            }
+
+            // ------------------------------------------
+            // PHASE 3: ATMOSPHERE EFFECTS
+            // ------------------------------------------
+
+            // Bloom: soft glow radiating from center/highlights
+            // Creates an angelic, soft-focus look
+            const bloom = sv('bloom') / 100;
+            if (bloom > 0.05) {
+                ctx.globalAlpha = bloom * 0.12;
+                ctx.globalCompositeOperation = 'screen';
+                const bloomGrad = ctx.createRadialGradient(w * 0.5, h * 0.35, 0, w * 0.5, h * 0.35, h * 0.5);
+                bloomGrad.addColorStop(0, 'rgba(255,255,240,0.4)');
+                bloomGrad.addColorStop(0.5, 'rgba(255,245,230,0.2)');
+                bloomGrad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = bloomGrad;
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Vignette: darkens edges to draw focus to the center/face
+            const vignette = sv('vignette') / 100;
+            if (vignette > 0.05) {
+                const vigGrad = ctx.createRadialGradient(w * 0.5, h * 0.5, h * 0.3, w * 0.5, h * 0.5, h * 0.8);
+                vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                vigGrad.addColorStop(1, 'rgba(0,0,0,' + (vignette * 0.6) + ')');
+                ctx.fillStyle = vigGrad;
+                ctx.fillRect(0, 0, w, h);
+            }
+
+            // Film grain: adds random noise for a vintage/artistic feel
+            // Processes every 4th pixel for performance on mobile
+            const grain = sv('grain') / 100;
+            if (grain > 0.05) {
+                const grainData = ctx.getImageData(0, 0, w, h);
+                const pixels = grainData.data;
+                const intensity = grain * 30;
+                // Skip pixels (every 16th byte = every 4th pixel) for performance
+                for (let i = 0; i < pixels.length; i += 16) {
+                    const noise = (Math.random() - 0.5) * intensity;
+                    pixels[i] += noise;       // Red
+                    pixels[i + 1] += noise;   // Green
+                    pixels[i + 2] += noise;   // Blue
+                    // pixels[i+3] is alpha - leave unchanged
+                }
+                ctx.putImageData(grainData, 0, 0);
+            }
+
+            // Fade: lifts black levels for a dreamy, vintage look
+            // Uses 'lighten' blend so only dark areas are affected
+            const fade = sv('fade') / 100;
+            if (fade > 0.05) {
+                ctx.globalAlpha = fade * 0.15;
+                ctx.fillStyle = '#2a2a3a';
+                ctx.globalCompositeOperation = 'lighten';
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Color filter: tinted overlay that shifts the mood
+            // Cycles through: rose, lavender, blue, peach, mint
+            const colorFilter = sv('colorFilter') / 100;
+            if (colorFilter > 0.05) {
+                ctx.globalAlpha = colorFilter * 0.1;
+                const filterColors = ['#ffccdd', '#ddccff', '#ccddff', '#ffeedd', '#ddffee'];
+                const idx = Math.floor(colorFilter * 4.9);
+                ctx.fillStyle = filterColors[idx];
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Sharpen: unsharp mask approximation
+            // Adds crispness to eyes, lips, and hair edges
+            if (sharpen > 0.1) {
+                ctx.globalAlpha = sharpen * 0.4;
+                ctx.globalCompositeOperation = 'overlay';
+                ctx.filter = 'blur(0.5px) contrast(1.5)';
+                ctx.drawImage(canvas, 0, 0, w, h);
+                ctx.filter = 'none';
+                ctx.globalCompositeOperation = 'source-over';
                 ctx.globalAlpha = 1.0;
             }
         }
 
-        // Capture photo
+        // ============================================
+        // PHOTO CAPTURE
+        // Saves the current beautified frame
+        // ============================================
         function capturePhoto() {
+            // Create a temporary canvas to capture the current frame
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(canvas, 0, 0);
+            tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
 
+            // Convert to JPEG blob
             tempCanvas.toBlob(function(blob) {
-                // Method 1: Try share API (iOS "Save Image" option)
+                // Try iOS Share Sheet first (allows "Save Image" option)
                 if (navigator.share && navigator.canShare) {
                     const file = new File([blob], 'beauty-photo.jpg', { type: 'image/jpeg' });
                     if (navigator.canShare({ files: [file] })) {
-                        navigator.share({
-                            files: [file],
-                            title: 'Beauty Cam Photo'
-                        }).then(() => {
-                            showToast('📸 Photo shared!');
-                        }).catch(() => {
-                            // User cancelled share - fall back to download
-                            downloadBlob(blob);
-                        });
+                        navigator.share({ files: [file], title: 'Beauty Cam Photo' })
+                            .then(() => showToast('📸 Photo shared!'))
+                            .catch(() => downloadBlob(blob)); // User cancelled - fall back
                         return;
                     }
                 }
-                // Method 2: Download fallback
+                // Fallback: trigger download
                 downloadBlob(blob);
             }, 'image/jpeg', 0.92);
         }
 
+        // ============================================
+        // DOWNLOAD FALLBACK
+        // Creates a temporary link to download the photo
+        // ============================================
         function downloadBlob(blob) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -476,7 +1010,10 @@
             showToast('📸 Photo saved!');
         }
 
-        // Toast
+        // ============================================
+        // TOAST NOTIFICATION
+        // Shows a brief popup message
+        // ============================================
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
@@ -484,16 +1021,47 @@
             setTimeout(() => toast.classList.remove('show'), 2500);
         }
 
-        // Event listeners
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+
+        // --- Tab switching ---
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Deactivate all tabs
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                // Activate clicked tab
+                this.classList.add('active');
+                document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+            });
+        });
+
+        // --- Preset buttons ---
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                applyPreset(this.dataset.preset);
+            });
+        });
+
+        // --- Slider value display updates ---
+        sliderIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', updateAllDisplays);
+        });
+
+        // --- Capture button ---
         document.getElementById('capture-btn').addEventListener('click', capturePhoto);
 
+        // --- Flip camera button ---
         document.getElementById('flip-btn').addEventListener('click', function() {
             currentFacing = currentFacing === 'user' ? 'environment' : 'user';
             startCamera();
         });
 
-        // Compare: hold to see original
+        // --- Compare button (hold to see original) ---
         const compareBtn = document.getElementById('compare-btn');
+        // Touch events for mobile
         compareBtn.addEventListener('touchstart', function(e) {
             e.preventDefault();
             showOriginal = true;
@@ -502,49 +1070,62 @@
             e.preventDefault();
             showOriginal = false;
         });
+        // Mouse events for desktop testing
         compareBtn.addEventListener('mousedown', function() { showOriginal = true; });
         compareBtn.addEventListener('mouseup', function() { showOriginal = false; });
         compareBtn.addEventListener('mouseleave', function() { showOriginal = false; });
 
-        // Reset
+        // --- Reset button ---
         document.getElementById('reset-btn').addEventListener('click', function() {
             applyPreset('natural');
             showToast('↺ Reset to Natural');
         });
 
-        // Preset buttons
-        document.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                applyPreset(this.dataset.preset);
-            });
+        // --- Timer button ---
+        // Cycles through: off → 3s → 5s → 10s → off
+        document.getElementById('timer-btn').addEventListener('click', function() {
+            timerSeconds = timerSeconds === 0 ? 3 : timerSeconds === 3 ? 5 : timerSeconds === 5 ? 10 : 0;
+
+            if (timerSeconds === 0) {
+                showToast('⏱️ Timer off');
+                // Restore normal capture behavior
+                document.getElementById('capture-btn').onclick = capturePhoto;
+            } else {
+                showToast('⏱️ Timer: ' + timerSeconds + 's');
+                // Override capture to use countdown
+                document.getElementById('capture-btn').onclick = function() {
+                    let count = timerSeconds;
+                    showToast('📸 ' + count + '...');
+                    const interval = setInterval(() => {
+                        count--;
+                        if (count > 0) {
+                            showToast('📸 ' + count + '...');
+                        } else {
+                            clearInterval(interval);
+                            capturePhoto();
+                        }
+                    }, 1000);
+                };
+            }
         });
 
-        // Cycle presets
-        let presetIndex = 0;
-        const presetNames = Object.keys(presets);
-        document.getElementById('preset-cycle').addEventListener('click', function() {
-            presetIndex = (presetIndex + 1) % presetNames.length;
-            applyPreset(presetNames[presetIndex]);
-            showToast('🎨 ' + presetNames[presetIndex].charAt(0).toUpperCase() + presetNames[presetIndex].slice(1));
-        });
-
-        // Slider displays
-        [smoothSlider, brightSlider, softSlider, warmSlider].forEach(slider => {
-            slider.addEventListener('input', updateSliderDisplays);
-        });
-
-        // Initialize
+        // ============================================
+        // INITIALIZATION
+        // Start the camera and set initial display values
+        // ============================================
         startCamera();
+        updateAllDisplays();
 
     })();
     </script>
 
-    <!-- Register service worker for offline support -->
+    <!-- ===== SERVICE WORKER REGISTRATION ===== -->
+    <!-- This registers the service worker that enables offline functionality -->
     <script>
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js')
-            .then(function() { console.log('SW registered - app works offline!'); })
-            .catch(function(err) { console.log('SW registration failed:', err); });
+            .then(function() { console.log('Beauty Cam offline ready'); })
+            .catch(function() {});
     }
     </script>
 </body>
