@@ -1,11 +1,5 @@
-// ============================================
-// Beauty Cam - Service Worker
-// Makes the app work 100% offline after first load
-// ============================================
+const CACHE_NAME = 'beauty-cam-v3';
 
-const CACHE_NAME = 'beauty-cam-v2';
-
-// All files that need to be cached for offline use
 const ASSETS_TO_CACHE = [
   '/beauty-cam/',
   '/beauty-cam/index.html',
@@ -14,18 +8,24 @@ const ASSETS_TO_CACHE = [
   '/beauty-cam/icon-512.png'
 ];
 
-// Install event: cache all app files on first visit
+// TensorFlow.js and model files - cached on first use
+const CDN_ASSETS = [
+  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.17.0/dist/tf-backend-webgl.min.js',
+  'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js',
+  'https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5/dist/face-landmarks-detection.min.js'
+];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
+      // Cache local assets immediately
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  // Activate immediately without waiting for old SW to finish
   self.skipWaiting();
 });
 
-// Activate event: clean up any old caches from previous versions
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -35,17 +35,20 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  // Take control of all pages immediately
   self.clients.claim();
 });
 
-// Fetch event: serve from cache first (offline-first strategy)
-// If the file is in cache, return it instantly (works offline)
-// If not in cache, try the network (only happens on first load)
+// Cache-first strategy for everything
+// CDN files get cached on first successful fetch
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request);
-    })
-  );
-});
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      return fetch(event.request).then((response) => {
+        // Cache CDN resources and model files for offline use
+        if (response.ok && (
+          event.request.url.includes('cdn.jsdelivr.net') ||
+          event.request
