@@ -9,6 +9,13 @@
     <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="manifest" href="manifest.json">
     <title>Beauty Cam</title>
+
+    <!-- TensorFlow.js + Face Landmarks Detection (free, open source) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.17.0/dist/tf-backend-webgl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5/dist/face-landmarks-detection.min.js"></script>
+
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -21,71 +28,51 @@
             user-select: none;
         }
 
-        /* ===== CAMERA VIEW ===== */
-        /* We show the <video> element directly and apply CSS filters to it.
-           This is GPU-accelerated and works perfectly on iOS Safari. */
         #video {
             position: fixed;
             top: 0; left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            /* CSS filters applied here — GPU accelerated on iOS */
-            filter: none;
-            transform: scaleX(-1); /* Mirror front camera */
+            width: 100%; height: 100%;
+            object-fit: contain;
+            background: #000;
+            transform: scaleX(-1);
+            display: none;
         }
 
-        /* Hidden canvas only used for photo capture */
-        #capture-canvas { display: none; }
+        #canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
 
-        /* ===== OVERLAY LAYERS ===== */
-        /* These sit on top of the video to add color effects */
-        .overlay {
+        /* Loading screen */
+        #loading {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
-            z-index: 2;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: white;
+            transition: opacity 0.5s;
         }
-        #warmth-overlay {
-            background: #ffd4b8;
-            opacity: 0;
+        #loading.done { opacity: 0; pointer-events: none; }
+        #loading h1 { font-size: 28px; margin-bottom: 10px; }
+        #loading p { font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 30px; }
+        .loader {
+            width: 50px; height: 50px;
+            border: 3px solid rgba(255,107,157,0.2);
+            border-top-color: #ff6b9d;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
-        #tone-overlay {
-            background: #ccddcc;
-            opacity: 0;
-        }
-        #blush-overlay {
-            background: radial-gradient(circle at 30% 45%, rgba(238,136,153,0.4) 0%, transparent 12%),
-                        radial-gradient(circle at 70% 45%, rgba(238,136,153,0.4) 0%, transparent 12%);
-            opacity: 0;
-        }
-        #lip-overlay {
-            background: radial-gradient(ellipse at 50% 52%, rgba(204,68,102,0.5) 0%, transparent 6%);
-            opacity: 0;
-        }
-        #bloom-overlay {
-            background: radial-gradient(circle at 50% 35%, rgba(255,255,240,0.4) 0%, rgba(255,245,230,0.15) 30%, transparent 60%);
-            opacity: 0;
-        }
-        #vignette-overlay {
-            background: radial-gradient(circle at 50% 50%, transparent 40%, rgba(0,0,0,0.6) 100%);
-            opacity: 0;
-        }
-        #fade-overlay {
-            background: #2a2a3a;
-            mix-blend-mode: lighten;
-            opacity: 0;
-        }
-        #color-filter-overlay {
-            background: #ffccdd;
-            opacity: 0;
-        }
-        #grain-overlay {
-            opacity: 0;
-            mix-blend-mode: overlay;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #load-status { margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.5); }
 
-        /* ===== TOP BAR ===== */
+        /* Top bar */
         .top-bar {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -101,23 +88,23 @@
             font-weight: 600;
             text-shadow: 0 1px 3px rgba(0,0,0,0.5);
         }
-        .offline-badge {
-            background: rgba(76, 175, 80, 0.8);
-            color: white;
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 10px;
+        .fps-badge {
+            background: rgba(0,0,0,0.4);
+            color: rgba(255,255,255,0.6);
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 8px;
             margin-left: 8px;
         }
 
-        /* ===== CONTROLS ===== */
+        /* Controls */
         .controls {
             position: fixed;
             bottom: 0; left: 0; right: 0;
-            max-height: 60vh;
+            max-height: 55vh;
             overflow-y: auto;
             padding: 10px 16px calc(env(safe-area-inset-bottom, 20px) + 10px);
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.8);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-radius: 20px 20px 0 0;
@@ -128,28 +115,18 @@
         .controls.hidden {
             transform: translateY(calc(100% - 85px));
         }
-
         .pull-handle {
-            width: 40px;
-            height: 5px;
+            width: 40px; height: 5px;
             background: rgba(255,255,255,0.4);
             border-radius: 3px;
             margin: 4px auto 10px;
             cursor: pointer;
         }
+        .collapsible-content { transition: opacity 0.2s; }
+        .controls.hidden .collapsible-content { opacity: 0; pointer-events: none; }
 
-        .collapsible-content {
-            transition: opacity 0.2s;
-        }
-        .controls.hidden .collapsible-content {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        /* Tabs */
         .tab-bar {
-            display: flex;
-            gap: 4px;
+            display: flex; gap: 4px;
             margin-bottom: 12px;
             overflow-x: auto;
             padding-bottom: 4px;
@@ -158,38 +135,29 @@
             background: rgba(255,255,255,0.08);
             border: 1px solid rgba(255,255,255,0.15);
             color: rgba(255,255,255,0.6);
-            font-size: 11px;
-            padding: 5px 11px;
+            font-size: 11px; padding: 5px 11px;
             border-radius: 14px;
-            white-space: nowrap;
-            cursor: pointer;
+            white-space: nowrap; cursor: pointer;
             -webkit-tap-highlight-color: transparent;
         }
         .tab-btn.active {
             background: rgba(255,107,157,0.25);
-            border-color: #ff6b9d;
-            color: white;
+            border-color: #ff6b9d; color: white;
         }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        /* Presets */
         .presets {
-            display: flex;
-            gap: 7px;
+            display: flex; gap: 7px;
             margin-bottom: 12px;
-            overflow-x: auto;
-            padding-bottom: 4px;
+            overflow-x: auto; padding-bottom: 4px;
         }
         .preset-btn {
             background: rgba(255,255,255,0.1);
             border: 1.5px solid rgba(255,255,255,0.2);
-            color: white;
-            font-size: 11px;
-            padding: 5px 11px;
-            border-radius: 16px;
-            white-space: nowrap;
-            cursor: pointer;
+            color: white; font-size: 11px;
+            padding: 5px 11px; border-radius: 16px;
+            white-space: nowrap; cursor: pointer;
             -webkit-tap-highlight-color: transparent;
         }
         .preset-btn.active {
@@ -197,49 +165,35 @@
             border-color: #ff6b9d;
         }
 
-        /* Sliders */
         .slider-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 11px;
-            color: white;
+            display: flex; align-items: center;
+            margin-bottom: 11px; color: white;
         }
         .slider-label {
-            width: 80px;
-            font-size: 11px;
+            width: 80px; font-size: 11px;
             flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            display: flex; align-items: center; gap: 4px;
         }
         .slider-label .emoji { font-size: 13px; }
         input[type="range"] {
             flex: 1;
-            -webkit-appearance: none;
-            appearance: none;
-            height: 4px;
-            border-radius: 2px;
+            -webkit-appearance: none; appearance: none;
+            height: 4px; border-radius: 2px;
             background: rgba(255,255,255,0.2);
-            outline: none;
-            margin: 0 8px;
+            outline: none; margin: 0 8px;
         }
         input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
+            -webkit-appearance: none; appearance: none;
+            width: 20px; height: 20px;
             border-radius: 50%;
             background: #ff6b9d;
             box-shadow: 0 2px 6px rgba(255,107,157,0.4);
         }
         .slider-value {
-            width: 28px;
-            text-align: right;
-            font-size: 10px;
-            color: rgba(255,255,255,0.5);
+            width: 28px; text-align: right;
+            font-size: 10px; color: rgba(255,255,255,0.5);
         }
 
-        /* Buttons */
         .button-row {
             display: flex;
             justify-content: space-around;
@@ -249,28 +203,19 @@
             margin-top: 8px;
         }
         .action-btn {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 10px;
-            text-align: center;
-            cursor: pointer;
+            background: none; border: none;
+            color: white; font-size: 10px;
+            text-align: center; cursor: pointer;
             padding: 5px;
             -webkit-tap-highlight-color: transparent;
         }
-        .action-btn .icon {
-            font-size: 22px;
-            display: block;
-            margin-bottom: 2px;
-        }
+        .action-btn .icon { font-size: 22px; display: block; margin-bottom: 2px; }
         .capture-btn {
-            width: 58px;
-            height: 58px;
+            width: 58px; height: 58px;
             border-radius: 50%;
             border: 4px solid rgba(255,255,255,0.9);
             background: transparent;
-            cursor: pointer;
-            position: relative;
+            cursor: pointer; position: relative;
             -webkit-tap-highlight-color: transparent;
         }
         .capture-btn::after {
@@ -283,240 +228,104 @@
         }
         .capture-btn:active::after { transform: scale(0.85); }
 
-        /* Toast */
         .toast {
-            position: fixed;
-            top: 80px;
-            left: 50%;
+            position: fixed; top: 80px; left: 50%;
             transform: translateX(-50%) translateY(-20px);
-            background: rgba(30, 30, 30, 0.9);
+            background: rgba(30,30,30,0.9);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 13px;
+            color: white; padding: 10px 20px;
+            border-radius: 20px; font-size: 13px;
             opacity: 0;
             transition: opacity 0.3s, transform 0.3s;
-            pointer-events: none;
-            z-index: 100;
+            pointer-events: none; z-index: 100;
         }
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     </style>
 </head>
 <body>
 
-    <!-- Live video element — filters applied via CSS (GPU accelerated) -->
-    <video id="video" autoplay playsinline muted></video>
-
-    <!-- Overlay layers for color effects -->
-    <div class="overlay" id="warmth-overlay"></div>
-    <div class="overlay" id="tone-overlay"></div>
-    <div class="overlay" id="blush-overlay"></div>
-    <div class="overlay" id="lip-overlay"></div>
-    <div class="overlay" id="bloom-overlay"></div>
-    <div class="overlay" id="vignette-overlay"></div>
-    <div class="overlay" id="fade-overlay"></div>
-    <div class="overlay" id="color-filter-overlay"></div>
-    <div class="overlay" id="grain-overlay"></div>
-
-    <!-- Hidden canvas for photo capture only -->
-    <canvas id="capture-canvas"></canvas>
-
-    <!-- Top bar -->
-    <div class="top-bar">
-        <span class="app-title">✨ Beauty Cam</span>
-        <span class="offline-badge">● Offline</span>
+    <!-- Loading screen while AI model downloads -->
+    <div id="loading">
+        <h1>✨ Beauty Cam</h1>
+        <p>Loading AI beauty engine...</p>
+        <div class="loader"></div>
+        <div id="load-status">Initializing...</div>
     </div>
 
-    <!-- Controls -->
-    <div class="controls" id="controls">
-        <div class="pull-handle" id="pull-handle"></div>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
 
+    <div class="top-bar">
+        <span class="app-title">✨ Beauty Cam</span>
+        <span class="fps-badge" id="fps-badge">-- fps</span>
+    </div>
+
+    <div class="controls hidden" id="controls">
+        <div class="pull-handle" id="pull-handle"></div>
         <div class="collapsible-content">
-            <!-- Presets -->
             <div class="presets">
                 <button class="preset-btn active" data-preset="natural">🌿 Natural</button>
                 <button class="preset-btn" data-preset="youthful">🌸 Youthful</button>
                 <button class="preset-btn" data-preset="glam">💫 Glam</button>
+                <button class="preset-btn" data-preset="meitu">🪄 Meitu</button>
                 <button class="preset-btn" data-preset="subtle">🤍 Subtle</button>
-                <button class="preset-btn" data-preset="porcelain">🪷 Porcelain</button>
-                <button class="preset-btn" data-preset="golden">🌅 Golden</button>
             </div>
 
-            <!-- Tabs -->
             <div class="tab-bar">
-                <button class="tab-btn active" data-tab="skin">Skin</button>
+                <button class="tab-btn active" data-tab="face">Face</button>
+                <button class="tab-btn" data-tab="skin">Skin</button>
                 <button class="tab-btn" data-tab="light">Light</button>
-                <button class="tab-btn" data-tab="color">Color</button>
-                <button class="tab-btn" data-tab="face">Face</button>
                 <button class="tab-btn" data-tab="effects">Effects</button>
             </div>
 
+            <!-- FACE TAB (Meitu-style reshaping) -->
+            <div class="tab-content active" id="tab-face">
+                <div class="slider-row"><span class="slider-label"><span class="emoji">📐</span> Face Slim</span><input type="range" id="faceSlim" min="0" max="100" value="30"><span class="slider-value" id="val-faceSlim">30</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🦴</span> Jawline</span><input type="range" id="jawline" min="0" max="100" value="25"><span class="slider-value" id="val-jawline">25</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">👃</span> Nose Slim</span><input type="range" id="noseSlim" min="0" max="100" value="15"><span class="slider-value" id="val-noseSlim">15</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">👀</span> Eye Size</span><input type="range" id="eyeSize" min="0" max="100" value="20"><span class="slider-value" id="val-eyeSize">20</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">👄</span> Lip Plump</span><input type="range" id="lipPlump" min="0" max="100" value="10"><span class="slider-value" id="val-lipPlump">10</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">😊</span> Chin</span><input type="range" id="chin" min="-50" max="50" value="10"><span class="slider-value" id="val-chin">10</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">📏</span> Forehead</span><input type="range" id="forehead" min="-50" max="50" value="0"><span class="slider-value" id="val-forehead">0</span></div>
+            </div>
+
             <!-- SKIN TAB -->
-            <div class="tab-content active" id="tab-skin">
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">✨</span> Smooth</span>
-                    <input type="range" id="smoothing" min="0" max="100" value="40">
-                    <span class="slider-value" id="val-smoothing">40</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🫧</span> Pores</span>
-                    <input type="range" id="pores" min="0" max="100" value="25">
-                    <span class="slider-value" id="val-pores">25</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🩹</span> Blemish</span>
-                    <input type="range" id="blemish" min="0" max="100" value="15">
-                    <span class="slider-value" id="val-blemish">15</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🎨</span> Tone Even</span>
-                    <input type="range" id="toneEven" min="0" max="100" value="20">
-                    <span class="slider-value" id="val-toneEven">20</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">👁️</span> Undereye</span>
-                    <input type="range" id="undereye" min="0" max="100" value="15">
-                    <span class="slider-value" id="val-undereye">15</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🌸</span> Soft</span>
-                    <input type="range" id="softness" min="0" max="100" value="30">
-                    <span class="slider-value" id="val-softness">30</span>
-                </div>
+            <div class="tab-content" id="tab-skin">
+                <div class="slider-row"><span class="slider-label"><span class="emoji">✨</span> Smooth</span><input type="range" id="smoothing" min="0" max="100" value="50"><span class="slider-value" id="val-smoothing">50</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🩹</span> Blemish</span><input type="range" id="blemish" min="0" max="100" value="40"><span class="slider-value" id="val-blemish">40</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🤍</span> Whiten</span><input type="range" id="whiten" min="0" max="100" value="20"><span class="slider-value" id="val-whiten">20</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🌸</span> Rosy</span><input type="range" id="rosy" min="0" max="100" value="15"><span class="slider-value" id="val-rosy">15</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">👁️</span> Undereye</span><input type="range" id="undereye" min="0" max="100" value="30"><span class="slider-value" id="val-undereye">30</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">✨</span> Eye Bright</span><input type="range" id="eyeBright" min="0" max="100" value="20"><span class="slider-value" id="val-eyeBright">20</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🩷</span> Lip Color</span><input type="range" id="lipColor" min="0" max="100" value="15"><span class="slider-value" id="val-lipColor">15</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🌺</span> Blush</span><input type="range" id="blush" min="0" max="100" value="10"><span class="slider-value" id="val-blush">10</span></div>
             </div>
 
             <!-- LIGHT TAB -->
             <div class="tab-content" id="tab-light">
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">☀️</span> Exposure</span>
-                    <input type="range" id="exposure" min="-50" max="50" value="8">
-                    <span class="slider-value" id="val-exposure">8</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">💡</span> Brightness</span>
-                    <input type="range" id="brightness" min="0" max="100" value="15">
-                    <span class="slider-value" id="val-brightness">15</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🔆</span> Highlights</span>
-                    <input type="range" id="highlights" min="-50" max="50" value="5">
-                    <span class="slider-value" id="val-highlights">5</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🌑</span> Shadows</span>
-                    <input type="range" id="shadows" min="-50" max="50" value="10">
-                    <span class="slider-value" id="val-shadows">10</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🎚️</span> Contrast</span>
-                    <input type="range" id="contrast" min="-50" max="50" value="-8">
-                    <span class="slider-value" id="val-contrast">-8</span>
-                </div>
-            </div>
-
-            <!-- COLOR TAB -->
-            <div class="tab-content" id="tab-color">
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🌡️</span> Warmth</span>
-                    <input type="range" id="warmth" min="0" max="100" value="12">
-                    <span class="slider-value" id="val-warmth">12</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🎨</span> Saturation</span>
-                    <input type="range" id="saturation" min="-50" max="50" value="5">
-                    <span class="slider-value" id="val-saturation">5</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🌈</span> Hue Shift</span>
-                    <input type="range" id="hueShift" min="-30" max="30" value="0">
-                    <span class="slider-value" id="val-hueShift">0</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🩷</span> Lip Tint</span>
-                    <input type="range" id="lipTint" min="0" max="100" value="0">
-                    <span class="slider-value" id="val-lipTint">0</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🌺</span> Blush</span>
-                    <input type="range" id="blush" min="0" max="100" value="0">
-                    <span class="slider-value" id="val-blush">0</span>
-                </div>
-            </div>
-
-            <!-- FACE TAB -->
-            <div class="tab-content" id="tab-face">
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">📐</span> Face Slim</span>
-                    <input type="range" id="faceSlim" min="0" max="100" value="0">
-                    <span class="slider-value" id="val-faceSlim">0</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">👀</span> Eye Size</span>
-                    <input type="range" id="eyeSize" min="0" max="100" value="0">
-                    <span class="slider-value" id="val-eyeSize">0</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">✨</span> Eye Bright</span>
-                    <input type="range" id="eyeBright" min="0" max="100" value="10">
-                    <span class="slider-value" id="val-eyeBright">10</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🔍</span> Sharpen</span>
-                    <input type="range" id="sharpen" min="0" max="100" value="15">
-                    <span class="slider-value" id="val-sharpen">15</span>
-                </div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">☀️</span> Exposure</span><input type="range" id="exposure" min="-50" max="50" value="5"><span class="slider-value" id="val-exposure">5</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">💡</span> Brightness</span><input type="range" id="brightness" min="0" max="100" value="10"><span class="slider-value" id="val-brightness">10</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🎚️</span> Contrast</span><input type="range" id="contrast" min="-50" max="50" value="-5"><span class="slider-value" id="val-contrast">-5</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🌡️</span> Warmth</span><input type="range" id="warmth" min="0" max="100" value="10"><span class="slider-value" id="val-warmth">10</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🎨</span> Saturation</span><input type="range" id="saturation" min="-50" max="50" value="5"><span class="slider-value" id="val-saturation">5</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🔍</span> Sharpen</span><input type="range" id="sharpen" min="0" max="100" value="20"><span class="slider-value" id="val-sharpen">20</span></div>
             </div>
 
             <!-- EFFECTS TAB -->
             <div class="tab-content" id="tab-effects">
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🌟</span> Bloom</span>
-                    <input type="range" id="bloom" min="0" max="100" value="10">
-                    <span class="slider-value" id="val-bloom">10</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🖼️</span> Vignette</span>
-                    <input type="range" id="vignette" min="0" max="100" value="8">
-                    <span class="slider-value" id="val-vignette">8</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🎞️</span> Grain</span>
-                    <input type="range" id="grain" min="0" max="100" value="0">
-                    <span class="slider-value" id="val-grain">0</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">🌫️</span> Fade</span>
-                    <input type="range" id="fade" min="0" max="100" value="0">
-                    <span class="slider-value" id="val-fade">0</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label"><span class="emoji">💜</span> Color Filter</span>
-                    <input type="range" id="colorFilter" min="0" max="100" value="0">
-                    <span class="slider-value" id="val-colorFilter">0</span>
-                </div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🌟</span> Bloom</span><input type="range" id="bloom" min="0" max="100" value="15"><span class="slider-value" id="val-bloom">15</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">🖼️</span> Vignette</span><input type="range" id="vignette" min="0" max="100" value="10"><span class="slider-value" id="val-vignette">10</span></div>
+                <div class="slider-row"><span class="slider-label"><span class="emoji">💜</span> Filter</span><input type="range" id="colorFilter" min="0" max="100" value="0"><span class="slider-value" id="val-colorFilter">0</span></div>
             </div>
         </div>
 
-        <!-- Buttons (always visible) -->
         <div class="button-row">
-            <button class="action-btn" id="flip-btn">
-                <span class="icon">🔄</span>Flip
-            </button>
-            <button class="action-btn" id="compare-btn">
-                <span class="icon">👁️</span>Hold
-            </button>
+            <button class="action-btn" id="flip-btn"><span class="icon">🔄</span>Flip</button>
+            <button class="action-btn" id="compare-btn"><span class="icon">👁️</span>Hold</button>
             <button class="capture-btn" id="capture-btn"></button>
-            <button class="action-btn" id="reset-btn">
-                <span class="icon">↺</span>Reset
-            </button>
-            <button class="action-btn" id="timer-btn">
-                <span class="icon">⏱️</span>Timer
-            </button>
+            <button class="action-btn" id="reset-btn"><span class="icon">↺</span>Reset</button>
+            <button class="action-btn" id="timer-btn"><span class="icon">⏱️</span>Timer</button>
         </div>
     </div>
 
@@ -530,20 +339,11 @@
         // ELEMENTS
         // ============================================
         const video = document.getElementById('video');
-        const captureCanvas = document.getElementById('capture-canvas');
-
-        // Overlay elements
-        const overlays = {
-            warmth: document.getElementById('warmth-overlay'),
-            tone: document.getElementById('tone-overlay'),
-            blush: document.getElementById('blush-overlay'),
-            lip: document.getElementById('lip-overlay'),
-            bloom: document.getElementById('bloom-overlay'),
-            vignette: document.getElementById('vignette-overlay'),
-            fade: document.getElementById('fade-overlay'),
-            colorFilter: document.getElementById('color-filter-overlay'),
-            grain: document.getElementById('grain-overlay')
-        };
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const loadingEl = document.getElementById('loading');
+        const loadStatus = document.getElementById('load-status');
+        const fpsBadge = document.getElementById('fps-badge');
 
         // ============================================
         // STATE
@@ -551,71 +351,39 @@
         let currentFacing = 'user';
         let showOriginal = false;
         let stream = null;
-        let panelHidden = false;
+        let panelHidden = true;
         let timerSeconds = 0;
-        let updateRAF = null;
+        let detector = null;
+        let currentFace = null;
+        let animationId = null;
+        let frameCount = 0;
+        let lastFpsTime = performance.now();
+
+        // Process face detection at lower rate for performance
+        let detectEveryN = 2;
+        let frameIndex = 0;
 
         // ============================================
         // SLIDER IDS
         // ============================================
         const sliderIds = [
-            'smoothing', 'pores', 'blemish', 'toneEven', 'undereye', 'softness',
-            'exposure', 'brightness', 'highlights', 'shadows', 'contrast',
-            'warmth', 'saturation', 'hueShift', 'lipTint', 'blush',
-            'faceSlim', 'eyeSize', 'eyeBright', 'sharpen',
-            'bloom', 'vignette', 'grain', 'fade', 'colorFilter'
+            'faceSlim', 'jawline', 'noseSlim', 'eyeSize', 'lipPlump', 'chin', 'forehead',
+            'smoothing', 'blemish', 'whiten', 'rosy', 'undereye', 'eyeBright', 'lipColor', 'blush',
+            'exposure', 'brightness', 'contrast', 'warmth', 'saturation', 'sharpen',
+            'bloom', 'vignette', 'colorFilter'
         ];
 
-        function sv(id) {
-            return parseFloat(document.getElementById(id).value);
-        }
+        function sv(id) { return parseFloat(document.getElementById(id).value); }
 
         // ============================================
         // PRESETS
         // ============================================
         const presets = {
-            natural: {
-                smoothing: 40, pores: 25, blemish: 15, toneEven: 20, undereye: 15, softness: 30,
-                exposure: 8, brightness: 15, highlights: 5, shadows: 10, contrast: -8,
-                warmth: 12, saturation: 5, hueShift: 0, lipTint: 0, blush: 0,
-                faceSlim: 0, eyeSize: 0, eyeBright: 10, sharpen: 15,
-                bloom: 10, vignette: 8, grain: 0, fade: 0, colorFilter: 0
-            },
-            youthful: {
-                smoothing: 60, pores: 40, blemish: 35, toneEven: 35, undereye: 40, softness: 45,
-                exposure: 12, brightness: 25, highlights: 12, shadows: 18, contrast: -12,
-                warmth: 18, saturation: 8, hueShift: 0, lipTint: 12, blush: 12,
-                faceSlim: 8, eyeSize: 8, eyeBright: 25, sharpen: 12,
-                bloom: 25, vignette: 12, grain: 0, fade: 5, colorFilter: 8
-            },
-            glam: {
-                smoothing: 70, pores: 50, blemish: 45, toneEven: 45, undereye: 45, softness: 20,
-                exposure: 8, brightness: 35, highlights: 18, shadows: 8, contrast: 5,
-                warmth: 25, saturation: 12, hueShift: 0, lipTint: 35, blush: 25,
-                faceSlim: 12, eyeSize: 12, eyeBright: 35, sharpen: 30,
-                bloom: 18, vignette: 20, grain: 0, fade: 0, colorFilter: 15
-            },
-            subtle: {
-                smoothing: 25, pores: 12, blemish: 8, toneEven: 12, undereye: 8, softness: 15,
-                exposure: 4, brightness: 8, highlights: 3, shadows: 8, contrast: -4,
-                warmth: 8, saturation: 3, hueShift: 0, lipTint: 0, blush: 0,
-                faceSlim: 0, eyeSize: 0, eyeBright: 8, sharpen: 8,
-                bloom: 8, vignette: 5, grain: 0, fade: 0, colorFilter: 0
-            },
-            porcelain: {
-                smoothing: 75, pores: 55, blemish: 50, toneEven: 50, undereye: 50, softness: 50,
-                exposure: 12, brightness: 30, highlights: 18, shadows: 22, contrast: -18,
-                warmth: 4, saturation: -5, hueShift: 0, lipTint: 8, blush: 8,
-                faceSlim: 4, eyeSize: 4, eyeBright: 22, sharpen: 8,
-                bloom: 30, vignette: 8, grain: 0, fade: 8, colorFilter: 4
-            },
-            golden: {
-                smoothing: 45, pores: 30, blemish: 20, toneEven: 25, undereye: 20, softness: 25,
-                exposure: 10, brightness: 22, highlights: 12, shadows: 12, contrast: -4,
-                warmth: 40, saturation: 10, hueShift: 4, lipTint: 8, blush: 18,
-                faceSlim: 4, eyeSize: 0, eyeBright: 18, sharpen: 20,
-                bloom: 22, vignette: 18, grain: 4, fade: 0, colorFilter: 12
-            }
+            natural: { faceSlim:30, jawline:25, noseSlim:15, eyeSize:20, lipPlump:10, chin:10, forehead:0, smoothing:50, blemish:40, whiten:20, rosy:15, undereye:30, eyeBright:20, lipColor:15, blush:10, exposure:5, brightness:10, contrast:-5, warmth:10, saturation:5, sharpen:20, bloom:15, vignette:10, colorFilter:0 },
+            youthful: { faceSlim:45, jawline:40, noseSlim:20, eyeSize:35, lipPlump:20, chin:15, forehead:0, smoothing:70, blemish:60, whiten:30, rosy:25, undereye:50, eyeBright:35, lipColor:25, blush:20, exposure:8, brightness:20, contrast:-10, warmth:15, saturation:8, sharpen:15, bloom:25, vignette:12, colorFilter:5 },
+            glam: { faceSlim:50, jawline:45, noseSlim:25, eyeSize:40, lipPlump:30, chin:15, forehead:0, smoothing:80, blemish:70, whiten:25, rosy:20, undereye:55, eyeBright:45, lipColor:40, blush:30, exposure:5, brightness:25, contrast:0, warmth:20, saturation:12, sharpen:30, bloom:20, vignette:20, colorFilter:10 },
+            meitu: { faceSlim:60, jawline:55, noseSlim:35, eyeSize:50, lipPlump:25, chin:20, forehead:5, smoothing:85, blemish:80, whiten:40, rosy:30, undereye:60, eyeBright:50, lipColor:30, blush:25, exposure:8, brightness:20, contrast:-8, warmth:12, saturation:8, sharpen:15, bloom:30, vignette:10, colorFilter:8 },
+            subtle: { faceSlim:15, jawline:12, noseSlim:8, eyeSize:10, lipPlump:5, chin:5, forehead:0, smoothing:30, blemish:25, whiten:10, rosy:8, undereye:15, eyeBright:10, lipColor:8, blush:5, exposure:3, brightness:5, contrast:-3, warmth:5, saturation:3, sharpen:10, bloom:8, vignette:5, colorFilter:0 }
         };
 
         function applyPreset(name) {
@@ -626,7 +394,6 @@
                 if (el && p[id] !== undefined) el.value = p[id];
             });
             updateAllDisplays();
-            updateFilters();
             document.querySelectorAll('.preset-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.preset === name);
             });
@@ -641,6 +408,43 @@
         }
 
         // ============================================
+        // FACE LANDMARK INDICES (MediaPipe Face Mesh 468 points)
+        // ============================================
+        const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+        const LEFT_EYE = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
+        const RIGHT_EYE = [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398];
+        const LIPS = [61,146,91,181,84,17,314,405,321,375,291,308,324,318,402,317,14,87,178,88,95,185,40,39,37,0,267,269,270,409,415];
+        const NOSE = [1,2,98,327,168,6,197,195,5,4,19,94,370];
+        const JAW_LINE = [234,93,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,323,454,356,389,251,284,332,297,338];
+        const LEFT_CHEEK_CENTER = 116;
+        const RIGHT_CHEEK_CENTER = 345;
+        const FOREHEAD_TOP = 10;
+        const CHIN_BOTTOM = 152;
+
+        // ============================================
+        // LOAD AI MODEL
+        // ============================================
+        async function loadModel() {
+            loadStatus.textContent = 'Loading TensorFlow.js...';
+            await tf.setBackend('webgl');
+            await tf.ready();
+
+            loadStatus.textContent = 'Loading face detection model...';
+            const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+            detector = await faceLandmarksDetection.createDetector(model, {
+                runtime: 'tfjs',
+                refineLandmarks: true,
+                maxFaces: 1
+            });
+
+            loadStatus.textContent = 'Starting camera...';
+            await startCamera();
+
+            loadStatus.textContent = 'Ready!';
+            setTimeout(() => loadingEl.classList.add('done'), 300);
+        }
+
+        // ============================================
         // CAMERA
         // ============================================
         async function startCamera() {
@@ -649,257 +453,557 @@
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: currentFacing,
-                        width: { ideal: 1080 },
-                        height: { ideal: 1920 }
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
                     },
                     audio: false
                 });
                 video.srcObject = stream;
+                video.style.display = 'block';
                 await video.play();
 
-                // Fix mirror for front/back camera
-                video.style.transform = (currentFacing === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
-                // Apply current filters
-                updateFilters();
+                if (animationId) cancelAnimationFrame(animationId);
+                renderLoop();
             } catch (err) {
                 showToast('📷 Please allow camera access');
             }
         }
 
         // ============================================
-        // FILTER APPLICATION
-        // Key insight: We apply CSS filter directly to the <video> element.
-        // This is 100% GPU-accelerated on iOS Safari — no canvas needed!
-        // Color overlays are separate <div> elements with opacity.
-        // This approach is buttery smooth on mobile.
+        // MAIN RENDER LOOP
         // ============================================
-        function updateFilters() {
-            if (showOriginal) {
-                video.style.filter = 'none';
-                Object.values(overlays).forEach(el => el.style.opacity = '0');
-                return;
+        async function renderLoop() {
+            if (video.readyState >= video.HAVE_CURRENT_DATA) {
+                const w = canvas.width;
+                const h = canvas.height;
+
+                // Draw video frame (mirrored for front camera)
+                ctx.save();
+                if (currentFacing === 'user') {
+                    ctx.translate(w, 0);
+                    ctx.scale(-1, 1);
+                }
+                ctx.drawImage(video, 0, 0, w, h);
+                ctx.restore();
+
+                if (!showOriginal) {
+                    // Detect face every N frames for performance
+                    frameIndex++;
+                    if (frameIndex >= detectEveryN) {
+                        frameIndex = 0;
+                        try {
+                            const faces = await detector.estimateFaces(video, { flipHorizontal: (currentFacing === 'user') });
+                            if (faces.length > 0) {
+                                currentFace = faces[0];
+                            }
+                        } catch(e) {}
+                    }
+
+                    // Apply beauty effects
+                    if (currentFace) {
+                        applyBeautyEffects(w, h);
+                    }
+
+                    // Apply global effects (these work without face detection too)
+                    applyGlobalEffects(w, h);
+                }
+
+                // FPS counter
+                frameCount++;
+                const now = performance.now();
+                if (now - lastFpsTime >= 1000) {
+                    fpsBadge.textContent = frameCount + ' fps';
+                    frameCount = 0;
+                    lastFpsTime = now;
+                }
             }
 
-            // Read values
+            animationId = requestAnimationFrame(renderLoop);
+        }
+
+        // ============================================
+        // BEAUTY EFFECTS (uses face landmarks)
+        // ============================================
+        function applyBeautyEffects(w, h) {
+            const keypoints = currentFace.keypoints;
+            if (!keypoints || keypoints.length < 468) return;
+
             const smooth = sv('smoothing') / 100;
-            const pores = sv('pores') / 100;
             const blemish = sv('blemish') / 100;
-            const soft = sv('softness') / 100;
-            const exposure = sv('exposure') / 50;
-            const bright = sv('brightness') / 100;
-            const contrast = sv('contrast') / 50;
-            const sat = sv('saturation') / 50;
-            const hue = sv('hueShift');
-            const warmth = sv('warmth') / 100;
-            const toneEven = sv('toneEven') / 100;
-            const lipTint = sv('lipTint') / 100;
+            const whiten = sv('whiten') / 100;
+            const rosy = sv('rosy') / 100;
+            const undereye = sv('undereye') / 100;
+            const eyeBright = sv('eyeBright') / 100;
+            const lipColor = sv('lipColor') / 100;
             const blush = sv('blush') / 100;
-            const bloom = sv('bloom') / 100;
-            const vignette = sv('vignette') / 100;
-            const grain = sv('grain') / 100;
-            const fade = sv('fade') / 100;
-            const colorFilter = sv('colorFilter') / 100;
             const faceSlim = sv('faceSlim') / 100;
+            const jawline = sv('jawline') / 100;
+            const noseSlim = sv('noseSlim') / 100;
+            const eyeSize = sv('eyeSize') / 100;
+            const lipPlump = sv('lipPlump') / 100;
+            const chin = sv('chin') / 50;
+            const forehead = sv('forehead') / 50;
 
-            // --- Build CSS filter string for <video> element ---
-            let filterParts = [];
+            // Get face bounding box from landmarks
+            let minX = w, maxX = 0, minY = h, maxY = 0;
+            for (const kp of keypoints) {
+                if (kp.x < minX) minX = kp.x;
+                if (kp.x > maxX) maxX = kp.x;
+                if (kp.y < minY) minY = kp.y;
+                if (kp.y > maxY) maxY = kp.y;
+            }
+            const faceW = maxX - minX;
+            const faceH = maxY - minY;
+            const faceCX = (minX + maxX) / 2;
+            const faceCY = (minY + maxY) / 2;
 
-            // Smoothing: blur (combines smooth + pores + blemish)
-            // Use lower max blur for natural look (max ~1.5px)
-            const totalBlur = (smooth * 0.4 + pores * 0.3 + blemish * 0.3) * 1.5;
-            if (totalBlur > 0.05) {
-                filterParts.push('blur(' + totalBlur.toFixed(2) + 'px)');
+            // ------------------------------------------
+            // SKIN SMOOTHING (selective bilateral filter approximation)
+            // Only smooths the face region, keeps rest sharp
+            // ------------------------------------------
+            if (smooth > 0.05 || blemish > 0.05) {
+                const totalSmooth = (smooth * 0.6 + blemish * 0.4);
+                const blurRadius = Math.round(totalSmooth * faceW * 0.04);
+
+                if (blurRadius > 0) {
+                    // Get face region
+                    const fx = Math.max(0, Math.floor(minX - faceW * 0.1));
+                    const fy = Math.max(0, Math.floor(minY - faceH * 0.1));
+                    const fw = Math.min(w - fx, Math.ceil(faceW * 1.2));
+                    const fh = Math.min(h - fy, Math.ceil(faceH * 1.2));
+
+                    // Draw blurred face region on top with mask
+                    ctx.save();
+
+                    // Create elliptical clip for face area
+                    ctx.beginPath();
+                    ctx.ellipse(faceCX, faceCY, faceW * 0.48, faceH * 0.52, 0, 0, Math.PI * 2);
+                    ctx.clip();
+
+                    // Draw blurred version over the face
+                    ctx.filter = 'blur(' + blurRadius + 'px)';
+                    ctx.globalAlpha = totalSmooth * 0.7;
+                    if (currentFacing === 'user') {
+                        ctx.translate(w, 0);
+                        ctx.scale(-1, 1);
+                    }
+                    ctx.drawImage(video, 0, 0, w, h);
+                    ctx.restore();
+
+                    // Restore sharpness to eyes, lips, eyebrows
+                    // by redrawing those areas unblurred
+                    ctx.save();
+                    // Left eye region
+                    const le = getRegionBounds(keypoints, LEFT_EYE);
+                    const re = getRegionBounds(keypoints, RIGHT_EYE);
+                    const lp = getRegionBounds(keypoints, LIPS);
+
+                    ctx.beginPath();
+                    drawRegionPath(ctx, keypoints, LEFT_EYE, 1.4);
+                    drawRegionPath(ctx, keypoints, RIGHT_EYE, 1.4);
+                    drawRegionPath(ctx, keypoints, LIPS, 1.2);
+                    ctx.clip();
+
+                    ctx.filter = 'none';
+                    ctx.globalAlpha = totalSmooth * 0.7;
+                    if (currentFacing === 'user') {
+                        ctx.translate(w, 0);
+                        ctx.scale(-1, 1);
+                    }
+                    ctx.drawImage(video, 0, 0, w, h);
+                    ctx.restore();
+                }
             }
 
-            // Brightness
-            const totalBright = 1 + (exposure * 0.2) + (bright * 0.3);
-            if (Math.abs(totalBright - 1) > 0.01) {
-                filterParts.push('brightness(' + totalBright.toFixed(3) + ')');
+            // ------------------------------------------
+            // SKIN WHITENING / BRIGHTENING
+            // ------------------------------------------
+            if (whiten > 0.05) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.ellipse(faceCX, faceCY, faceW * 0.45, faceH * 0.5, 0, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.globalAlpha = whiten * 0.12;
+                ctx.fillStyle = '#ffffff';
+                ctx.globalCompositeOperation = 'soft-light';
+                ctx.fillRect(0, 0, w, h);
+                ctx.restore();
             }
 
-            // Contrast (softness reduces it)
-            const totalContrast = 1 + (contrast * 0.25) - (soft * 0.12);
-            if (Math.abs(totalContrast - 1) > 0.01) {
-                filterParts.push('contrast(' + totalContrast.toFixed(3) + ')');
+            // ------------------------------------------
+            // ROSY SKIN TONE
+            // ------------------------------------------
+            if (rosy > 0.05) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.ellipse(faceCX, faceCY, faceW * 0.4, faceH * 0.45, 0, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.globalAlpha = rosy * 0.06;
+                ctx.fillStyle = '#ffcccc';
+                ctx.fillRect(0, 0, w, h);
+                ctx.restore();
             }
 
-            // Saturation
-            const totalSat = 1 + (sat * 0.35) + (warmth * 0.06);
-            if (Math.abs(totalSat - 1) > 0.01) {
-                filterParts.push('saturate(' + totalSat.toFixed(3) + ')');
+            // ------------------------------------------
+            // UNDER-EYE BRIGHTENING
+            // ------------------------------------------
+            if (undereye > 0.1) {
+                const leftEyeBottom = keypoints[145];
+                const rightEyeBottom = keypoints[374];
+                if (leftEyeBottom && rightEyeBottom) {
+                    ctx.globalAlpha = undereye * 0.1;
+                    const radius = faceW * 0.08;
+
+                    const ug1 = ctx.createRadialGradient(leftEyeBottom.x, leftEyeBottom.y + radius * 0.5, 0, leftEyeBottom.x, leftEyeBottom.y + radius * 0.5, radius);
+                    ug1.addColorStop(0, 'rgba(255,235,220,0.6)');
+                    ug1.addColorStop(1, 'rgba(255,235,220,0)');
+                    ctx.fillStyle = ug1;
+                    ctx.fillRect(0, 0, w, h);
+
+                    const ug2 = ctx.createRadialGradient(rightEyeBottom.x, rightEyeBottom.y + radius * 0.5, 0, rightEyeBottom.x, rightEyeBottom.y + radius * 0.5, radius);
+                    ug2.addColorStop(0, 'rgba(255,235,220,0.6)');
+                    ug2.addColorStop(1, 'rgba(255,235,220,0)');
+                    ctx.fillStyle = ug2;
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.globalAlpha = 1;
+                }
             }
 
-            // Hue rotation
-            if (Math.abs(hue) > 0.5) {
-                filterParts.push('hue-rotate(' + hue + 'deg)');
+            // ------------------------------------------
+            // EYE BRIGHTENING
+            // ------------------------------------------
+            if (eyeBright > 0.1) {
+                const leftEyeCenter = keypoints[159];
+                const rightEyeCenter = keypoints[386];
+                if (leftEyeCenter && rightEyeCenter) {
+                    ctx.globalAlpha = eyeBright * 0.12;
+                    ctx.globalCompositeOperation = 'screen';
+                    const er = faceW * 0.05;
+
+                    const eg1 = ctx.createRadialGradient(leftEyeCenter.x, leftEyeCenter.y, 0, leftEyeCenter.x, leftEyeCenter.y, er);
+                    eg1.addColorStop(0, 'rgba(255,255,255,0.7)');
+                    eg1.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctx.fillStyle = eg1;
+                    ctx.fillRect(0, 0, w, h);
+
+                    const eg2 = ctx.createRadialGradient(rightEyeCenter.x, rightEyeCenter.y, 0, rightEyeCenter.x, rightEyeCenter.y, er);
+                    eg2.addColorStop(0, 'rgba(255,255,255,0.7)');
+                    eg2.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctx.fillStyle = eg2;
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.globalAlpha = 1;
+                }
             }
 
-            // Sepia for warmth (subtle — gives golden tone)
-            if (warmth > 0.1) {
-                filterParts.push('sepia(' + (warmth * 0.15).toFixed(3) + ')');
+            // ------------------------------------------
+            // LIP COLOR
+            // ------------------------------------------
+            if (lipColor > 0.05) {
+                ctx.save();
+                ctx.beginPath();
+                drawRegionPath(ctx, keypoints, LIPS, 1.0);
+                ctx.clip();
+                ctx.globalAlpha = lipColor * 0.2;
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.fillStyle = '#cc3355';
+                ctx.fillRect(0, 0, w, h);
+                ctx.restore();
             }
 
-            // Apply CSS filter to video element
-            video.style.filter = filterParts.length > 0 ? filterParts.join(' ') : 'none';
+            // ------------------------------------------
+            // BLUSH
+            // ------------------------------------------
+            if (blush > 0.05) {
+                const lc = keypoints[LEFT_CHEEK_CENTER];
+                const rc = keypoints[RIGHT_CHEEK_CENTER];
+                if (lc && rc) {
+                    ctx.globalAlpha = blush * 0.12;
+                    const br = faceW * 0.1;
 
-            // --- Face slim via CSS transform ---
-            const mirror = (currentFacing === 'user') ? -1 : 1;
-            if (faceSlim > 0.05) {
-                const scaleX = 1 - (faceSlim * 0.05);
-                video.style.transform = 'scaleX(' + (mirror * scaleX) + ')';
-            } else {
-                video.style.transform = 'scaleX(' + mirror + ')';
+                    const bg1 = ctx.createRadialGradient(lc.x, lc.y, 0, lc.x, lc.y, br);
+                    bg1.addColorStop(0, 'rgba(238,120,140,0.5)');
+                    bg1.addColorStop(1, 'rgba(238,120,140,0)');
+                    ctx.fillStyle = bg1;
+                    ctx.fillRect(0, 0, w, h);
+
+                    const bg2 = ctx.createRadialGradient(rc.x, rc.y, 0, rc.x, rc.y, br);
+                    bg2.addColorStop(0, 'rgba(238,120,140,0.5)');
+                    bg2.addColorStop(1, 'rgba(238,120,140,0)');
+                    ctx.fillStyle = bg2;
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.globalAlpha = 1;
+                }
             }
 
-            // --- Overlay opacities ---
-            overlays.warmth.style.opacity = (warmth * 0.06).toFixed(3);
-            overlays.tone.style.opacity = (toneEven * 0.04).toFixed(3);
-            overlays.blush.style.opacity = (blush * 0.35).toFixed(3);
-            overlays.lip.style.opacity = (lipTint * 0.4).toFixed(3);
-            overlays.bloom.style.opacity = (bloom * 0.3).toFixed(3);
-            overlays.vignette.style.opacity = (vignette * 0.7).toFixed(3);
-            overlays.fade.style.opacity = (fade * 0.2).toFixed(3);
-            overlays.grain.style.opacity = (grain * 0.2).toFixed(3);
+            // ------------------------------------------
+            // FACE RESHAPING (warp via redraw regions)
+            // This uses the "liquify" technique: redraw portions
+            // of the image shifted toward/away from center
+            // ------------------------------------------
+            if (faceSlim > 0.05 || jawline > 0.05 || noseSlim > 0.05 || eyeSize > 0.05 || lipPlump > 0.05) {
+                // Get current frame data for warping
+                const imageData = ctx.getImageData(0, 0, w, h);
+                const src = new Uint32Array(imageData.data.buffer);
+                const dst = new Uint32Array(new ArrayBuffer(src.length * 4));
+                dst.set(src);
 
-            // Color filter (change color based on value)
-            if (colorFilter > 0.03) {
-                const colors = ['#ffccdd', '#ddccff', '#ccddff', '#ffeedd', '#ddffee'];
-                const idx = Math.floor(colorFilter * 4.9);
-                overlays.colorFilter.style.background = colors[idx];
-                overlays.colorFilter.style.opacity = (colorFilter * 0.12).toFixed(3);
-            } else {
-                overlays.colorFilter.style.opacity = '0';
+                // Face slim: push pixels toward center horizontally
+                if (faceSlim > 0.05) {
+                    warpTowardCenter(src, dst, w, h, keypoints, FACE_OVAL, faceCX, faceCY, faceW * 0.5, faceH * 0.55, faceSlim * 0.08, 'horizontal');
+                }
+
+                // Jawline: push jaw points inward
+                if (jawline > 0.05) {
+                    warpTowardCenter(src, dst, w, h, keypoints, JAW_LINE, faceCX, faceCY + faceH * 0.15, faceW * 0.45, faceH * 0.35, jawline * 0.06, 'horizontal');
+                }
+
+                // Nose slim
+                if (noseSlim > 0.05) {
+                    const noseTip = keypoints[4];
+                    if (noseTip) {
+                        warpTowardPoint(src, dst, w, h, noseTip.x, noseTip.y, faceW * 0.12, noseSlim * 0.05);
+                    }
+                }
+
+                // Eye enlarge
+                if (eyeSize > 0.05) {
+                    const lEye = keypoints[159];
+                    const rEye = keypoints[386];
+                    if (lEye && rEye) {
+                        warpFromPoint(src, dst, w, h, lEye.x, lEye.y, faceW * 0.1, eyeSize * 0.04);
+                        warpFromPoint(src, dst, w, h, rEye.x, rEye.y, faceW * 0.1, eyeSize * 0.04);
+                    }
+                }
+
+                // Lip plump
+                if (lipPlump > 0.05) {
+                    const lipCenter = keypoints[13];
+                    if (lipCenter) {
+                        warpFromPoint(src, dst, w, h, lipCenter.x, lipCenter.y, faceW * 0.08, lipPlump * 0.03);
+                    }
+                }
+
+                // Write back
+                const outData = new ImageData(new Uint8ClampedArray(dst.buffer), w, h);
+                ctx.putImageData(outData, 0, 0);
             }
         }
 
         // ============================================
-        // PHOTO CAPTURE
-        // Renders the filtered video + overlays to a canvas for saving
+        // WARP FUNCTIONS (pixel-level face reshaping)
         // ============================================
-        function capturePhoto() {
-            const vw = video.videoWidth;
-            const vh = video.videoHeight;
-            captureCanvas.width = vw;
-            captureCanvas.height = vh;
-            const ctx = captureCanvas.getContext('2d');
 
-            // Apply same CSS filters to canvas context
-            ctx.filter = video.style.filter || 'none';
+        // Push pixels toward center (for face slim / jawline)
+        function warpTowardCenter(src, dst, w, h, keypoints, indices, cx, cy, radiusX, radiusY, strength, direction) {
+            const rx2 = radiusX * radiusX;
+            const ry2 = radiusY * radiusY;
 
-            // Mirror if front camera
-            if (currentFacing === 'user') {
-                ctx.translate(vw, 0);
-                ctx.scale(-1, 1);
+            const startX = Math.max(0, Math.floor(cx - radiusX));
+            const endX = Math.min(w, Math.ceil(cx + radiusX));
+            const startY = Math.max(0, Math.floor(cy - radiusY));
+            const endY = Math.min(h, Math.ceil(cy + radiusY));
+
+            for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                    const dx = (x - cx) / radiusX;
+                    const dy = (y - cy) / radiusY;
+                    const dist2 = dx * dx + dy * dy;
+
+                    if (dist2 < 1) {
+                        // Smooth falloff
+                        const factor = (1 - dist2) * (1 - dist2) * strength;
+
+                        let srcX, srcY;
+                        if (direction === 'horizontal') {
+                            srcX = x + (x - cx) * factor;
+                            srcY = y;
+                        } else {
+                            srcX = x;
+                            srcY = y + (y - cy) * factor;
+                        }
+
+                        // Bilinear sample
+                        const sx = Math.floor(srcX);
+                        const sy = Math.floor(srcY);
+                        if (sx >= 0 && sx < w - 1 && sy >= 0 && sy < h - 1) {
+                            dst[y * w + x] = src[sy * w + sx];
+                        }
+                    }
+                }
             }
+        }
 
-            // Face slim
-            const faceSlim = sv('faceSlim') / 100;
-            if (faceSlim > 0.05) {
-                const scaleX = 1 - (faceSlim * 0.05);
-                ctx.translate(vw * (1 - scaleX) / 2, 0);
-                ctx.scale(scaleX, 1);
+        // Push pixels toward a point (for nose slim)
+        function warpTowardPoint(src, dst, w, h, px, py, radius, strength) {
+            const r2 = radius * radius;
+            const startX = Math.max(0, Math.floor(px - radius));
+            const endX = Math.min(w, Math.ceil(px + radius));
+            const startY = Math.max(0, Math.floor(py - radius));
+            const endY = Math.min(h, Math.ceil(py + radius));
+
+            for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                    const dx = x - px;
+                    const dy = y - py;
+                    const dist2 = (dx * dx + dy * dy) / r2;
+
+                    if (dist2 < 1) {
+                        const factor = (1 - dist2) * (1 - dist2) * strength;
+                        const srcX = x + dx * factor;
+                        const srcY = y + dy * factor;
+
+                        const sx = Math.floor(srcX);
+                        const sy = Math.floor(srcY);
+                        if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+                            dst[y * w + x] = src[sy * w + sx];
+                        }
+                    }
+                }
             }
+        }
 
-            // Draw video frame
-            ctx.drawImage(video, 0, 0, vw, vh);
+        // Push pixels away from a point (for eye enlarge, lip plump)
+        function warpFromPoint(src, dst, w, h, px, py, radius, strength) {
+            const r2 = radius * radius;
+            const startX = Math.max(0, Math.floor(px - radius));
+            const endX = Math.min(w, Math.ceil(px + radius));
+            const startY = Math.max(0, Math.floor(py - radius));
+            const endY = Math.min(h, Math.ceil(py + radius));
 
-            // Reset transforms for overlays
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.filter = 'none';
+            for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                    const dx = x - px;
+                    const dy = y - py;
+                    const dist2 = (dx * dx + dy * dy) / r2;
 
-            // Warmth overlay
+                    if (dist2 < 1) {
+                        const factor = (1 - dist2) * (1 - dist2) * strength;
+                        // Inward sampling = outward push
+                        const srcX = x - dx * factor;
+                        const srcY = y - dy * factor;
+
+                        const sx = Math.floor(srcX);
+                        const sy = Math.floor(srcY);
+                        if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+                            dst[y * w + x] = src[sy * w + sx];
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // GLOBAL EFFECTS (light, bloom, vignette)
+        // ============================================
+        function applyGlobalEffects(w, h) {
+            const exposure = sv('exposure') / 50;
+            const bright = sv('brightness') / 100;
+            const contrast = sv('contrast') / 50;
             const warmth = sv('warmth') / 100;
+            const sat = sv('saturation') / 50;
+            const sharpen = sv('sharpen') / 100;
+            const bloom = sv('bloom') / 100;
+            const vignette = sv('vignette') / 100;
+            const colorFilter = sv('colorFilter') / 100;
+
+            // Brightness/contrast via overlay
+            if (bright > 0.05 || exposure > 0.05) {
+                ctx.globalAlpha = (bright * 0.15 + exposure * 0.1);
+                ctx.globalCompositeOperation = 'screen';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1;
+            }
+
+            // Warmth
             if (warmth > 0.05) {
                 ctx.globalAlpha = warmth * 0.06;
                 ctx.fillStyle = '#ffd4b8';
-                ctx.fillRect(0, 0, vw, vh);
-            }
-
-            // Tone overlay
-            const toneEven = sv('toneEven') / 100;
-            if (toneEven > 0.05) {
-                ctx.globalAlpha = toneEven * 0.04;
-                ctx.fillStyle = '#ccddcc';
-                ctx.fillRect(0, 0, vw, vh);
-            }
-
-            // Blush
-            const blush = sv('blush') / 100;
-            if (blush > 0.05) {
-                ctx.globalAlpha = blush * 0.15;
-                const bl = ctx.createRadialGradient(vw*0.3, vh*0.45, 0, vw*0.3, vh*0.45, vw*0.1);
-                bl.addColorStop(0, '#ee8899');
-                bl.addColorStop(1, 'rgba(238,136,153,0)');
-                ctx.fillStyle = bl;
-                ctx.fillRect(0, 0, vw, vh);
-                const br = ctx.createRadialGradient(vw*0.7, vh*0.45, 0, vw*0.7, vh*0.45, vw*0.1);
-                br.addColorStop(0, '#ee8899');
-                br.addColorStop(1, 'rgba(238,136,153,0)');
-                ctx.fillStyle = br;
-                ctx.fillRect(0, 0, vw, vh);
-            }
-
-            // Lip tint
-            const lipTint = sv('lipTint') / 100;
-            if (lipTint > 0.05) {
-                ctx.globalAlpha = lipTint * 0.15;
-                ctx.globalCompositeOperation = 'multiply';
-                const lg = ctx.createRadialGradient(vw*0.5, vh*0.52, 0, vw*0.5, vh*0.52, vw*0.06);
-                lg.addColorStop(0, '#cc4466');
-                lg.addColorStop(1, 'rgba(204,68,102,0)');
-                ctx.fillStyle = lg;
-                ctx.fillRect(0, 0, vw, vh);
-                ctx.globalCompositeOperation = 'source-over';
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalAlpha = 1;
             }
 
             // Bloom
-            const bloom = sv('bloom') / 100;
             if (bloom > 0.05) {
                 ctx.globalAlpha = bloom * 0.15;
                 ctx.globalCompositeOperation = 'screen';
-                const bg = ctx.createRadialGradient(vw*0.5, vh*0.35, 0, vw*0.5, vh*0.35, vh*0.4);
-                bg.addColorStop(0, 'rgba(255,255,240,0.5)');
+                const bg = ctx.createRadialGradient(w*0.5, h*0.4, 0, w*0.5, h*0.4, h*0.5);
+                bg.addColorStop(0, 'rgba(255,255,240,0.4)');
                 bg.addColorStop(1, 'rgba(255,255,255,0)');
                 ctx.fillStyle = bg;
-                ctx.fillRect(0, 0, vw, vh);
+                ctx.fillRect(0, 0, w, h);
                 ctx.globalCompositeOperation = 'source-over';
+                ctx.globalAlpha = 1;
             }
 
             // Vignette
-            const vignette = sv('vignette') / 100;
             if (vignette > 0.05) {
-                ctx.globalAlpha = 1;
-                const vg = ctx.createRadialGradient(vw*0.5, vh*0.5, vh*0.3, vw*0.5, vh*0.5, vh*0.75);
+                const vg = ctx.createRadialGradient(w*0.5, h*0.5, h*0.3, w*0.5, h*0.5, h*0.7);
                 vg.addColorStop(0, 'rgba(0,0,0,0)');
                 vg.addColorStop(1, 'rgba(0,0,0,' + (vignette * 0.5) + ')');
                 ctx.fillStyle = vg;
-                ctx.fillRect(0, 0, vw, vh);
-            }
-
-            // Fade
-            const fade = sv('fade') / 100;
-            if (fade > 0.05) {
-                ctx.globalAlpha = fade * 0.15;
-                ctx.globalCompositeOperation = 'lighten';
-                ctx.fillStyle = '#2a2a3a';
-                ctx.fillRect(0, 0, vw, vh);
-                ctx.globalCompositeOperation = 'source-over';
+                ctx.fillRect(0, 0, w, h);
             }
 
             // Color filter
-            const colorFilter = sv('colorFilter') / 100;
             if (colorFilter > 0.05) {
                 ctx.globalAlpha = colorFilter * 0.1;
                 const colors = ['#ffccdd', '#ddccff', '#ccddff', '#ffeedd', '#ddffee'];
                 ctx.fillStyle = colors[Math.floor(colorFilter * 4.9)];
-                ctx.fillRect(0, 0, vw, vh);
+                ctx.fillRect(0, 0, w, h);
+                ctx.globalAlpha = 1;
             }
+        }
 
-            ctx.globalAlpha = 1;
+        // ============================================
+        // HELPER: Get bounding box of landmark region
+        // ============================================
+        function getRegionBounds(keypoints, indices) {
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (const i of indices) {
+                const kp = keypoints[i];
+                if (kp) {
+                    if (kp.x < minX) minX = kp.x;
+                    if (kp.x > maxX) maxX = kp.x;
+                    if (kp.y < minY) minY = kp.y;
+                    if (kp.y > maxY) maxY = kp.y;
+                }
+            }
+            return { minX, maxX, minY, maxY, cx: (minX+maxX)/2, cy: (minY+maxY)/2, w: maxX-minX, h: maxY-minY };
+        }
 
-            // Export
-            captureCanvas.toBlob(function(blob) {
+        // ============================================
+        // HELPER: Draw path around landmark region
+        // ============================================
+        function drawRegionPath(ctx, keypoints, indices, scale) {
+            const bounds = getRegionBounds(keypoints, indices);
+            const cx = bounds.cx;
+            const cy = bounds.cy;
+
+            ctx.moveTo(
+                cx + (keypoints[indices[0]].x - cx) * scale,
+                cy + (keypoints[indices[0]].y - cy) * scale
+            );
+            for (let i = 1; i < indices.length; i++) {
+                const kp = keypoints[indices[i]];
+                if (kp) {
+                    ctx.lineTo(cx + (kp.x - cx) * scale, cy + (kp.y - cy) * scale);
+                }
+            }
+            ctx.closePath();
+        }
+
+        // ============================================
+        // PHOTO CAPTURE
+        // ============================================
+        function capturePhoto() {
+            canvas.toBlob(function(blob) {
                 if (navigator.share && navigator.canShare) {
                     const file = new File([blob], 'beauty-photo.jpg', { type: 'image/jpeg' });
                     if (navigator.canShare({ files: [file] })) {
@@ -925,9 +1029,6 @@
             showToast('📸 Photo saved!');
         }
 
-        // ============================================
-        // TOAST
-        // ============================================
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
@@ -935,44 +1036,16 @@
             setTimeout(() => toast.classList.remove('show'), 2500);
         }
 
-        // ============================================
-        // PANEL TOGGLE
-        // ============================================
         function togglePanel() {
             panelHidden = !panelHidden;
             document.getElementById('controls').classList.toggle('hidden', panelHidden);
         }
 
         // ============================================
-        // GENERATE GRAIN TEXTURE (once)
+        // EVENTS
         // ============================================
-        function generateGrainOverlay() {
-            const size = 256;
-            const c = document.createElement('canvas');
-            c.width = size;
-            c.height = size;
-            const ctx = c.getContext('2d');
-            const img = ctx.createImageData(size, size);
-            for (let i = 0; i < img.data.length; i += 4) {
-                const v = (Math.random() - 0.5) * 100 + 128;
-                img.data[i] = v;
-                img.data[i+1] = v;
-                img.data[i+2] = v;
-                img.data[i+3] = 255;
-            }
-            ctx.putImageData(img, 0, 0);
-            overlays.grain.style.backgroundImage = 'url(' + c.toDataURL() + ')';
-            overlays.grain.style.backgroundSize = '256px 256px';
-        }
-
-        // ============================================
-        // EVENT LISTENERS
-        // ============================================
-
-        // Panel toggle
         document.getElementById('pull-handle').addEventListener('click', togglePanel);
 
-        // Tabs
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -982,48 +1055,34 @@
             });
         });
 
-        // Presets
         document.querySelectorAll('.preset-btn').forEach(btn => {
             btn.addEventListener('click', function() { applyPreset(this.dataset.preset); });
         });
 
-        // Sliders — update filters in real time
         sliderIds.forEach(id => {
             const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('input', function() {
-                    updateAllDisplays();
-                    // Debounce filter updates for smooth performance
-                    if (updateRAF) cancelAnimationFrame(updateRAF);
-                    updateRAF = requestAnimationFrame(updateFilters);
-                });
-            }
+            if (el) el.addEventListener('input', updateAllDisplays);
         });
 
-        // Capture
         document.getElementById('capture-btn').addEventListener('click', capturePhoto);
 
-        // Flip
         document.getElementById('flip-btn').addEventListener('click', function() {
             currentFacing = currentFacing === 'user' ? 'environment' : 'user';
             startCamera();
         });
 
-        // Compare (hold)
         const compareBtn = document.getElementById('compare-btn');
-        compareBtn.addEventListener('touchstart', function(e) { e.preventDefault(); showOriginal = true; updateFilters(); });
-        compareBtn.addEventListener('touchend', function(e) { e.preventDefault(); showOriginal = false; updateFilters(); });
-        compareBtn.addEventListener('mousedown', function() { showOriginal = true; updateFilters(); });
-        compareBtn.addEventListener('mouseup', function() { showOriginal = false; updateFilters(); });
-        compareBtn.addEventListener('mouseleave', function() { showOriginal = false; updateFilters(); });
+        compareBtn.addEventListener('touchstart', function(e) { e.preventDefault(); showOriginal = true; });
+        compareBtn.addEventListener('touchend', function(e) { e.preventDefault(); showOriginal = false; });
+        compareBtn.addEventListener('mousedown', function() { showOriginal = true; });
+        compareBtn.addEventListener('mouseup', function() { showOriginal = false; });
+        compareBtn.addEventListener('mouseleave', function() { showOriginal = false; });
 
-        // Reset
         document.getElementById('reset-btn').addEventListener('click', function() {
             applyPreset('natural');
             showToast('↺ Reset to Natural');
         });
 
-        // Timer
         document.getElementById('timer-btn').addEventListener('click', function() {
             timerSeconds = timerSeconds === 0 ? 3 : timerSeconds === 3 ? 5 : timerSeconds === 5 ? 10 : 0;
             if (timerSeconds === 0) {
@@ -1046,17 +1105,14 @@
         // ============================================
         // INIT
         // ============================================
-        generateGrainOverlay();
-        startCamera();
         updateAllDisplays();
-
-        // Start with panel collapsed so user sees full camera
-        setTimeout(() => { togglePanel(); }, 1500);
+        loadModel().catch(err => {
+            loadStatus.textContent = 'Error: ' + err.message;
+        });
 
     })();
     </script>
 
-    <!-- Service Worker -->
     <script>
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(function() {});
